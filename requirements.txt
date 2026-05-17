@@ -1,0 +1,4 @@
+Django>=5.1,<6
+gtfs-realtime-bindings>=1.0
+requests>=2.32
+APScheduler>=3.10
