@@ -1,7 +1,8 @@
-"""HTTP endpoints for arrivals and the wall display."""
+"""HTTP endpoints for arrivals, the wall display, and the setup UI."""
 
 from __future__ import annotations
 
+import json
 import time
 from urllib.parse import urlencode
 
@@ -78,22 +79,31 @@ def health(request: HttpRequest):
     })
 
 
-def _read_n(request: HttpRequest, default: int = 3) -> int:
+def _read_n(request: HttpRequest, default: int) -> int:
     try:
         n = int(request.GET.get("n", str(default)))
     except ValueError:
         n = default
-    return max(1, min(n, 12))
+    return max(1, min(n, 20))
+
+
+def _read_show_dest(request: HttpRequest) -> bool:
+    raw = request.GET.get("d", "1").strip().lower()
+    return raw not in ("0", "false", "no")
 
 
 @require_GET
 def display(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
-    n = _read_n(request)
+    show_dest = _read_show_dest(request)
+    # When destinations are hidden, default n bumps from 3 to 6 — rows are
+    # visually shorter so we can fit more before getting cluttered.
+    n = _read_n(request, default=6 if not show_dest else 3)
     now = int(time.time())
-    cards = [render_card(s, now=now, limit=n) for s in subs]
+    cards = [render_card(s, now=now, limit=n, show_dest=show_dest) for s in subs]
     stream_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
     stream_params.append(("n", str(n)))
+    stream_params.append(("d", "1" if show_dest else "0"))
     stream_qs = urlencode(stream_params)
     return render(request, "trains/display.html", {
         "subs": subs,
@@ -101,6 +111,7 @@ def display(request: HttpRequest):
         "stream_url": f"/display/stream?{stream_qs}" if subs else "",
         "feed_age": feed_age_seconds(now),
         "trains_per_card": n,
+        "show_destination": show_dest,
     })
 
 
@@ -109,7 +120,8 @@ def display_stream(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
     if not subs:
         return HttpResponseBadRequest("missing 's' subscriptions")
-    n = _read_n(request)
+    show_dest = _read_show_dest(request)
+    n = _read_n(request, default=6 if not show_dest else 3)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
@@ -120,7 +132,7 @@ def display_stream(request: HttpRequest):
             now = int(time.time())
             payload_parts: list[str] = []
             for s in subs:
-                html = render_card(s, now=now, limit=n)
+                html = render_card(s, now=now, limit=n, show_dest=show_dest)
                 payload_parts.append(
                     f'<turbo-stream action="replace" target="{s.card_id}">'
                     f'<template>{html}</template></turbo-stream>'
@@ -139,3 +151,31 @@ def display_stream(request: HttpRequest):
     resp["Cache-Control"] = "no-cache"
     resp["X-Accel-Buffering"] = "no"
     return resp
+
+
+@require_GET
+def setup(request: HttpRequest):
+    """Render the setup page with all stations embedded as JSON for the client."""
+    stations_list = []
+    # Iterate registry's internal map indirectly: we know all stop_ids by
+    # walking the keys; the registry doesn't expose them publicly so we use
+    # its loaded data via .get over the JSON file. Simpler: read the file.
+    from .stations import STATIONS_JSON
+    try:
+        with open(STATIONS_JSON, encoding="utf-8") as f:
+            raw = json.load(f)
+    except FileNotFoundError:
+        raw = {}
+    for stop_id, row in raw.items():
+        stations_list.append({
+            "id": stop_id,
+            "name": row.get("name") or stop_id,
+            "borough": row.get("borough") or "",
+            "lines": row.get("lines") or [],
+            "n_label": row.get("north_label"),
+            "s_label": row.get("south_label"),
+        })
+    stations_list.sort(key=lambda s: s["name"])
+    return render(request, "trains/setup.html", {
+        "stations_json": json.dumps(stations_list),
+    })

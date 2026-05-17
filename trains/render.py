@@ -62,7 +62,12 @@ def format_eta(seconds: int) -> str:
     return f"{(seconds + 30) // 60} min"
 
 
-def render_card(sub: Subscription, now: int | None = None, limit: int = 3) -> str:
+def render_card(
+    sub: Subscription,
+    now: int | None = None,
+    limit: int = 3,
+    show_dest: bool = True,
+) -> str:
     if now is None:
         now = int(time.time())
     station = registry.get(sub.stop_id)
@@ -78,6 +83,7 @@ def render_card(sub: Subscription, now: int | None = None, limit: int = 3) -> st
         "direction_label": direction_label,
         "rows": rows,
         "now": now,
+        "show_dest": show_dest,
     }
     return render_to_string("trains/_station_card.html", ctx)
 

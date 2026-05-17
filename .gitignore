@@ -10,5 +10,6 @@ __pycache__/
 staticfiles/
 
 .playwright-mcp/
-display-phase3*.png
+display-*.png
+setup-*.png
 
