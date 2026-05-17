@@ -30,7 +30,7 @@ class TrainRow:
     display: str  # "now" or "3 min" — JS may overwrite on per-second tick
 
 
-def upcoming(sub: Subscription, now: int, limit: int = 6) -> list[TrainRow]:
+def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
     arrivals = cache.for_stop(sub.stop_id, limit=30)
     rows: list[TrainRow] = []
     for a in arrivals:
@@ -62,7 +62,7 @@ def format_eta(seconds: int) -> str:
     return f"{(seconds + 30) // 60} min"
 
 
-def render_card(sub: Subscription, now: int | None = None) -> str:
+def render_card(sub: Subscription, now: int | None = None, limit: int = 3) -> str:
     if now is None:
         now = int(time.time())
     station = registry.get(sub.stop_id)
@@ -71,7 +71,7 @@ def render_card(sub: Subscription, now: int | None = None) -> str:
         if sub.direction in ("N", "S")
         else None
     )
-    rows = upcoming(sub, now=now)
+    rows = upcoming(sub, now=now, limit=limit)
     ctx = {
         "sub": sub,
         "station": station,

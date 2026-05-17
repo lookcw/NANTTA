@@ -78,17 +78,29 @@ def health(request: HttpRequest):
     })
 
 
+def _read_n(request: HttpRequest, default: int = 3) -> int:
+    try:
+        n = int(request.GET.get("n", str(default)))
+    except ValueError:
+        n = default
+    return max(1, min(n, 12))
+
+
 @require_GET
 def display(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
+    n = _read_n(request)
     now = int(time.time())
-    cards = [render_card(s, now=now) for s in subs]
-    stream_qs = urlencode([("s", f"{s.stop_id}:{s.direction}") for s in subs])
+    cards = [render_card(s, now=now, limit=n) for s in subs]
+    stream_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
+    stream_params.append(("n", str(n)))
+    stream_qs = urlencode(stream_params)
     return render(request, "trains/display.html", {
         "subs": subs,
         "cards": cards,
         "stream_url": f"/display/stream?{stream_qs}" if subs else "",
         "feed_age": feed_age_seconds(now),
+        "trains_per_card": n,
     })
 
 
@@ -97,6 +109,7 @@ def display_stream(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
     if not subs:
         return HttpResponseBadRequest("missing 's' subscriptions")
+    n = _read_n(request)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
@@ -107,7 +120,7 @@ def display_stream(request: HttpRequest):
             now = int(time.time())
             payload_parts: list[str] = []
             for s in subs:
-                html = render_card(s, now=now)
+                html = render_card(s, now=now, limit=n)
                 payload_parts.append(
                     f'<turbo-stream action="replace" target="{s.card_id}">'
                     f'<template>{html}</template></turbo-stream>'

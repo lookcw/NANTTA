@@ -21,7 +21,8 @@
   {% if not subs %}
     <section class="empty">
       <p>No stations subscribed.</p>
-      <p>Add subscriptions like <code>/display?s=127:N&amp;s=127:S&amp;s=R31:N</code></p>
+      <p>Add subscriptions like <code>/display?s=127:N&amp;s=127:S&amp;s=R31:N&amp;n=2</code></p>
+      <p><code>n</code> sets trains per card (default 3, max 12).</p>
       <p>Lookup station IDs from the GTFS Stops column at <a href="http://web.mta.info/developers/data/nyct/subway/Stations.csv">MTA Stations.csv</a>.</p>
     </section>
   {% else %}

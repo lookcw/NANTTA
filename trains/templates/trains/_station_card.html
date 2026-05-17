@@ -5,9 +5,7 @@
     <div class="card__sub">
       {% if direction_label %}
         <span class="card__dir">to {{ direction_label }}</span>
-      {% elif sub.direction == 'N' %}
-        <span class="card__dir card__dir--terminal">terminal</span>
-      {% elif sub.direction == 'S' %}
+      {% elif sub.direction == 'N' or sub.direction == 'S' %}
         <span class="card__dir card__dir--terminal">terminal</span>
       {% else %}
         <span class="card__dir">both directions</span>
@@ -20,8 +18,8 @@
     {% for row in rows %}
       <li class="train">
         <span class="bullet" style="background:{{ row.route_color }};color:{{ row.route_text_color }};">{{ row.route }}</span>
-        <span class="train__dest">{{ row.terminus_name }}</span>
         <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
+        <span class="train__dest">{{ row.terminus_name }}</span>
       </li>
     {% empty %}
       <li class="train train--empty">no upcoming trains</li>

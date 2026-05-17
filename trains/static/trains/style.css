@@ -3,7 +3,8 @@
   --panel: #141414;
   --panel-border: #222;
   --text: #f3f3f3;
-  --text-dim: #9a9a9a;
+  --text-dim: #8a8a8a;
+  --text-dimmer: #5a5a5a;
   --accent: #ffd400;
   --stale: #c93030;
 }
@@ -24,12 +25,12 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 32px 12px;
+  padding: 14px 28px 10px;
   border-bottom: 1px solid var(--panel-border);
 }
 .display__header h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: 0.18em;
   color: var(--text-dim);
   font-weight: 600;
@@ -39,7 +40,7 @@ html, body {
   gap: 16px;
   align-items: center;
   font-variant-numeric: tabular-nums;
-  font-size: 18px;
+  font-size: 16px;
   color: var(--text-dim);
 }
 .stale {
@@ -47,7 +48,7 @@ html, body {
   color: #fff;
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.1em;
   padding: 4px 10px;
   border-radius: 4px;
@@ -71,49 +72,44 @@ html, body {
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 18px;
-  padding: 18px 24px 28px;
+  gap: 14px;
+  padding: 14px 20px 24px;
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  padding: 22px 24px 18px;
+  border-radius: 12px;
+  padding: 16px 22px 14px;
   display: flex;
   flex-direction: column;
-  min-height: 260px;
 }
 .card__header {
   border-bottom: 1px solid var(--panel-border);
-  padding-bottom: 12px;
-  margin-bottom: 10px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
 }
 .card__name {
-  margin: 0 0 4px;
-  font-size: 30px;
+  margin: 0 0 2px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 .card__sub {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 10px;
   color: var(--text-dim);
-  font-size: 16px;
+  font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
-.card__dir {
-  color: var(--accent);
-}
-.card__dir--terminal {
-  color: var(--text-dim);
-  font-style: italic;
-}
+.card__dir { color: var(--accent); }
+.card__dir--terminal { color: var(--text-dim); font-style: italic; }
 .card__borough::before {
   content: "·";
-  margin-right: 14px;
+  margin-right: 10px;
   color: var(--panel-border);
 }
 
@@ -123,25 +119,29 @@ html, body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
+
+/* Row layout:  [BULLET]  [ETA]  [destination — small/dim]
+   Bullet and ETA dominate; destination is a caption. */
 .train {
   display: grid;
-  grid-template-columns: 56px 1fr auto;
-  align-items: center;
-  gap: 16px;
-  font-size: 26px;
-  font-variant-numeric: tabular-nums;
+  grid-template-columns: 52px minmax(5.5ch, max-content) 1fr;
+  align-items: baseline;
+  gap: 14px;
+  padding: 4px 0;
 }
 .train--empty {
-  color: var(--text-dim);
+  color: var(--text-dimmer);
   font-style: italic;
-  font-size: 18px;
+  font-size: 14px;
+  padding: 6px 0;
 }
 .bullet {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
   width: 48px;
   height: 48px;
   border-radius: 50%;
@@ -150,20 +150,28 @@ html, body {
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   letter-spacing: -0.02em;
 }
+.train__eta {
+  font-size: 38px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  white-space: nowrap;
+}
 .train__dest {
+  color: var(--text-dim);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.train__eta {
-  font-weight: 700;
-  color: var(--accent);
-  min-width: 4.5ch;
-  text-align: right;
+  align-self: center;
 }
 
 @media (min-width: 1800px) {
-  .card__name { font-size: 36px; }
-  .train { font-size: 30px; }
+  .card__name { font-size: 26px; }
+  .train__eta { font-size: 44px; }
   .bullet { width: 54px; height: 54px; font-size: 28px; }
+  .train__dest { font-size: 14px; }
 }
