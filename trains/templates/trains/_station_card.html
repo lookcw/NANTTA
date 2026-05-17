@@ -1,0 +1,30 @@
+{% load static %}
+<article class="card" id="{{ sub.card_id }}" data-stop-id="{{ sub.stop_id }}" data-direction="{{ sub.direction }}">
+  <header class="card__header">
+    <h2 class="card__name">{{ station.name|default:sub.stop_id }}</h2>
+    <div class="card__sub">
+      {% if direction_label %}
+        <span class="card__dir">to {{ direction_label }}</span>
+      {% elif sub.direction == 'N' %}
+        <span class="card__dir card__dir--terminal">terminal</span>
+      {% elif sub.direction == 'S' %}
+        <span class="card__dir card__dir--terminal">terminal</span>
+      {% else %}
+        <span class="card__dir">both directions</span>
+      {% endif %}
+      {% if station.borough %}<span class="card__borough">{{ station.borough }}</span>{% endif %}
+    </div>
+  </header>
+
+  <ul class="trains">
+    {% for row in rows %}
+      <li class="train">
+        <span class="bullet" style="background:{{ row.route_color }};color:{{ row.route_text_color }};">{{ row.route }}</span>
+        <span class="train__dest">{{ row.terminus_name }}</span>
+        <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
+      </li>
+    {% empty %}
+      <li class="train train--empty">no upcoming trains</li>
+    {% endfor %}
+  </ul>
+</article>

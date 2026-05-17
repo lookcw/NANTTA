@@ -1,17 +1,23 @@
-"""HTTP endpoints for arrivals.
-
-Phase 2 enriches each arrival with friendly station name, borough, and
-direction label (from MTA Stations.csv via the in-memory registry).
-"""
+"""HTTP endpoints for arrivals and the wall display."""
 
 from __future__ import annotations
 
 import time
+from urllib.parse import urlencode
 
-from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponseBadRequest,
+    JsonResponse,
+    StreamingHttpResponse,
+)
+from django.shortcuts import render
+from django.views.decorators.http import require_GET
 
 from .cache import cache
+from .render import feed_age_seconds, render_card
 from .stations import registry
+from .subscriptions import parse as parse_subs
 
 
 def arrivals(request: HttpRequest):
@@ -70,3 +76,53 @@ def health(request: HttpRequest):
         "feed_age_seconds": max(0, now - updated_at) if updated_at else None,
         "stations_loaded": registry.size(),
     })
+
+
+@require_GET
+def display(request: HttpRequest):
+    subs = parse_subs(request.GET.getlist("s"))
+    now = int(time.time())
+    cards = [render_card(s, now=now) for s in subs]
+    stream_qs = urlencode([("s", f"{s.stop_id}:{s.direction}") for s in subs])
+    return render(request, "trains/display.html", {
+        "subs": subs,
+        "cards": cards,
+        "stream_url": f"/display/stream?{stream_qs}" if subs else "",
+        "feed_age": feed_age_seconds(now),
+    })
+
+
+def display_stream(request: HttpRequest):
+    """SSE endpoint pushing Turbo Stream updates for every subscribed card."""
+    subs = parse_subs(request.GET.getlist("s"))
+    if not subs:
+        return HttpResponseBadRequest("missing 's' subscriptions")
+
+    interval = float(request.GET.get("interval", "5"))
+    interval = max(1.0, min(interval, 30.0))
+
+    def event_stream():
+        # First message immediately so the client gets fresh content on connect.
+        while True:
+            now = int(time.time())
+            payload_parts: list[str] = []
+            for s in subs:
+                html = render_card(s, now=now)
+                payload_parts.append(
+                    f'<turbo-stream action="replace" target="{s.card_id}">'
+                    f'<template>{html}</template></turbo-stream>'
+                )
+            # SSE: collapse any newlines in the payload into one "data:" line
+            # by emitting each line as its own data: field per the SSE spec.
+            data = "".join(payload_parts)
+            lines = data.split("\n")
+            yield "event: message\n"
+            for line in lines:
+                yield f"data: {line}\n"
+            yield "\n"
+            time.sleep(interval)
+
+    resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    resp["Cache-Control"] = "no-cache"
+    resp["X-Accel-Buffering"] = "no"
+    return resp

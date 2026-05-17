@@ -1,0 +1,36 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NANTTA — NYC Subway Wall Display</title>
+  <link rel="stylesheet" href="{% static 'trains/style.css' %}">
+  <script type="module" src="https://unpkg.com/@hotwired/turbo@8.0.5/dist/turbo.es2017-esm.js"></script>
+  <script src="{% static 'trains/countdown.js' %}" defer></script>
+</head>
+<body class="display" data-feed-age="{{ feed_age|default:'' }}">
+  <header class="display__header">
+    <h1>NANTTA</h1>
+    <div class="display__meta">
+      <span id="clock">--:--:--</span>
+      <span id="stale-indicator" class="stale" hidden>feed stale</span>
+    </div>
+  </header>
+
+  {% if not subs %}
+    <section class="empty">
+      <p>No stations subscribed.</p>
+      <p>Add subscriptions like <code>/display?s=127:N&amp;s=127:S&amp;s=R31:N</code></p>
+      <p>Lookup station IDs from the GTFS Stops column at <a href="http://web.mta.info/developers/data/nyct/subway/Stations.csv">MTA Stations.csv</a>.</p>
+    </section>
+  {% else %}
+    <main class="grid">
+      {% for card in cards %}
+        {{ card|safe }}
+      {% endfor %}
+    </main>
+    <turbo-stream-source src="{{ stream_url }}"></turbo-stream-source>
+  {% endif %}
+</body>
+</html>
