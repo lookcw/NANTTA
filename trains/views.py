@@ -1,6 +1,7 @@
 """HTTP endpoints for arrivals.
 
-Phase 1 only exposes a JSON sanity-check endpoint. UI comes in Phase 3.
+Phase 2 enriches each arrival with friendly station name, borough, and
+direction label (from MTA Stations.csv via the in-memory registry).
 """
 
 from __future__ import annotations
@@ -10,13 +11,11 @@ import time
 from django.http import HttpRequest, HttpResponseBadRequest, JsonResponse
 
 from .cache import cache
+from .stations import registry
 
 
 def arrivals(request: HttpRequest):
-    """GET /api/arrivals?stations=635,127&limit=8
-
-    Returns the next ``limit`` arrivals per station, sorted by arrival time.
-    """
+    """GET /api/arrivals?stations=635,127&limit=8"""
     raw = request.GET.get("stations", "").strip()
     if not raw:
         return HttpResponseBadRequest("missing 'stations' query param")
@@ -31,15 +30,22 @@ def arrivals(request: HttpRequest):
 
     out_stations = []
     for sid in station_ids:
+        meta = registry.get(sid)
         arrs = cache.for_stop(sid, limit=limit)
         out_stations.append({
             "stop_id": sid,
+            "name": meta.name if meta else sid,
+            "borough": meta.borough if meta else None,
+            "lines": list(meta.lines) if meta else [],
             "arrivals": [
                 {
                     "route": a.route_id,
                     "direction": a.direction,
+                    "direction_label": registry.direction_label(a.parent_stop_id, a.direction),
                     "platform_stop_id": a.stop_id,
                     "trip_id": a.trip_id,
+                    "terminus_stop_id": a.terminus_stop_id,
+                    "terminus_name": registry.name(a.terminus_stop_id),
                     "arrival_epoch": a.arrival_epoch,
                     "seconds_until": max(0, a.arrival_epoch - now),
                 }
@@ -62,4 +68,5 @@ def health(request: HttpRequest):
         "ok": not cache.is_empty(),
         "feed_updated_at": updated_at,
         "feed_age_seconds": max(0, now - updated_at) if updated_at else None,
+        "stations_loaded": registry.size(),
     })

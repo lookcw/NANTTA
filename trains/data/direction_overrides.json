@@ -1,0 +1,3 @@
+{
+  "_comment": "Per-station overrides for direction labels. Keys are GTFS stop_ids; values are {\"north\": \"...\", \"south\": \"...\"} with either key optional. Use when the MTA Stations.csv label disagrees with what the MTA app or platform signage actually says."
+}

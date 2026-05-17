@@ -21,12 +21,13 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class Arrival:
-    stop_id: str          # e.g. "635N"
-    parent_stop_id: str   # e.g. "635"
-    direction: str        # "N" or "S"
-    route_id: str         # e.g. "6", "Q", "A"
+    stop_id: str               # e.g. "635N"
+    parent_stop_id: str        # e.g. "635"
+    direction: str             # "N" or "S"
+    route_id: str              # e.g. "6", "Q", "A"
     trip_id: str
-    arrival_epoch: int    # seconds since unix epoch
+    arrival_epoch: int         # seconds since unix epoch
+    terminus_stop_id: str      # final stop in this trip's stop_time_update (e.g. "142")
 
 
 def _split_stop_id(raw: str) -> tuple[str, str, str]:
@@ -56,7 +57,14 @@ def parse_feed(payload: bytes, now: int | None = None) -> list[Arrival]:
         route_id = tu.trip.route_id
         trip_id = tu.trip.trip_id
 
-        for stu in tu.stop_time_update:
+        stop_updates = list(tu.stop_time_update)
+        if not stop_updates:
+            continue
+        # Terminus = last remaining scheduled stop in this trip update.
+        terminus_raw = stop_updates[-1].stop_id
+        terminus_parent = terminus_raw[:-1] if terminus_raw and terminus_raw[-1] in ("N", "S") else terminus_raw
+
+        for stu in stop_updates:
             t = 0
             if stu.HasField("arrival") and stu.arrival.time:
                 t = stu.arrival.time
@@ -73,6 +81,7 @@ def parse_feed(payload: bytes, now: int | None = None) -> list[Arrival]:
                     route_id=route_id,
                     trip_id=trip_id,
                     arrival_epoch=t,
+                    terminus_stop_id=terminus_parent,
                 )
             )
     return out
