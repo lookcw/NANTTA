@@ -498,10 +498,11 @@ html, body {
 }
 .selected__row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   gap: 10px;
   align-items: center;
 }
+.selected__row .dir-toggle { justify-self: end; }
 .selected__toggle {
   background: transparent;
   border: 0;

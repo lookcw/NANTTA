@@ -257,18 +257,12 @@
       if (!st) return;
       const isOpen = !!state.expanded[sub.id];
 
-      // Compact header row — toggle + name/meta + remove.
+      // Compact header row: chevron + name/meta + direction toggle + remove.
       const toggleBtn = el("button", {
         class: "selected__toggle",
         attrs: { type: "button", title: isOpen ? "Collapse" : "Expand", "aria-expanded": isOpen ? "true" : "false" },
         text: isOpen ? "▾" : "▸",
         on: { click: () => toggleExpanded(sub.id) },
-      });
-      const removeBtn = el("button", {
-        class: "remove-btn",
-        attrs: { type: "button", title: "Remove" },
-        text: "×",
-        on: { click: () => removeAt(idx) },
       });
       const main = el("div", { class: "selected__main" },
         el("div", { class: "selected__name", text: st.name }),
@@ -277,21 +271,12 @@
           el("span", { class: "muted", text: st.borough || "" }),
         ),
       );
-      const headerRow = el("div", { class: "selected__row" }, toggleBtn, main, removeBtn);
-
-      // Expanded body — direction toggle + per-line min-minutes filters.
-      const body = el("div", { class: "selected__body" });
-      body.hidden = !isOpen;
-
-      // Direction
-      const dirLabel = el("p", { class: "selected__body-label", text: "Direction" });
       const dirToggle = el("div", { class: "dir-toggle", attrs: { role: "radiogroup" } });
-      const dirEntries = [
+      [
         ["N", st.n_short || "N", st.n_label || "Northbound"],
         ["S", st.s_short || "S", st.s_label || "Southbound"],
         ["*", "Both", "Both directions"],
-      ];
-      dirEntries.forEach(([dir, text, title]) => {
+      ].forEach(([dir, text, title]) => {
         const btn = el("button", {
           attrs: { type: "button", title, "aria-pressed": sub.dir === dir ? "true" : "false" },
           dataset: { dir },
@@ -300,8 +285,17 @@
         });
         dirToggle.appendChild(btn);
       });
+      const removeBtn = el("button", {
+        class: "remove-btn",
+        attrs: { type: "button", title: "Remove" },
+        text: "×",
+        on: { click: () => removeAt(idx) },
+      });
+      const headerRow = el("div", { class: "selected__row" }, toggleBtn, main, dirToggle, removeBtn);
 
-      // Per-line min-minutes
+      // Expanded body — per-line min-minutes filters only.
+      const body = el("div", { class: "selected__body" });
+      body.hidden = !isOpen;
       const filterLabel = el("p", { class: "selected__body-label", text: "Only show trains arriving in N+ minutes (per line)" });
       const filterGrid = el("div", { class: "filter-grid" });
       st.lines.forEach((line) => {
@@ -315,7 +309,6 @@
         input.addEventListener("input", () => {
           const v = parseInt(input.value, 10);
           setFilter(sub.id, line, Number.isFinite(v) ? v : 0);
-          // light-weight update — don't re-render the whole list mid-typing
           renderUrl();
           saveToStorage();
         });
@@ -327,9 +320,6 @@
         row.appendChild(el("span", { class: "filter-row__suffix", text: "min" }));
         filterGrid.appendChild(row);
       });
-
-      body.appendChild(dirLabel);
-      body.appendChild(dirToggle);
       body.appendChild(filterLabel);
       body.appendChild(filterGrid);
 
