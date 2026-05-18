@@ -273,7 +273,16 @@ html, body {
   flex-shrink: 0;
 }
 .bullet__label { display: inline-block; line-height: 1; }
+
+/* Express diamond bullets. A rotated square's diagonal is side × √2 ≈ 1.41,
+   so an express the same width as the local circle looks ~40% larger. Per
+   MTA design convention the express should appear *slightly* larger than the
+   local for legibility (~1.15×). Shrink the underlying square so the diamond's
+   corner-to-corner extent matches that target: 1.15 / √2 ≈ 0.82. */
 .bullet--express {
+  width: calc(var(--bullet-size) * 0.82);
+  height: calc(var(--bullet-size) * 0.82);
+  font-size: calc(var(--bullet-fs) * 0.85);
   border-radius: 0;
   transform: rotate(45deg);
 }
@@ -284,6 +293,11 @@ html, body {
   width: var(--bullet-sm-size);
   height: var(--bullet-sm-size);
   font-size: var(--bullet-sm-fs);
+}
+.bullet--sm.bullet--express {
+  width: calc(var(--bullet-sm-size) * 0.82);
+  height: calc(var(--bullet-sm-size) * 0.82);
+  font-size: calc(var(--bullet-sm-fs) * 0.85);
 }
 .train__eta {
   font-size: var(--eta-fs);
