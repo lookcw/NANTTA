@@ -18,17 +18,8 @@ from django.template.loader import render_to_string
 from .cache import cache
 from .line_colors import color_for, text_color_for
 from .parser import Arrival
-from .stations import Complex, registry
+from .stations import Complex, direction_borough_short, registry
 from .subscriptions import Subscription
-
-
-BOROUGH_SHORT = {
-    "Manhattan": "MAN",
-    "Brooklyn": "BK",
-    "Bronx": "BX",
-    "Queens": "QNS",
-    "Staten Island": "SI",
-}
 
 
 # ---------------- grouping ----------------
@@ -99,7 +90,11 @@ class TrainRow:
     is_express: bool       # true for routes whose ID ended in 'X' (e.g. 6X, 7X)
     direction: str
     terminus_name: str
-    terminus_borough_short: str  # "MAN"|"BK"|"QNS"|"BX"|"SI" or "" — for chip mode
+    # Borough this train is heading toward as described on the platform sign:
+    # derived from the *platform's* MTA direction label, not from the trip's
+    # eventual terminus (an N at Queensboro southbound says "Manhattan" on the
+    # platform even though it ends in Brooklyn).
+    direction_borough_short: str  # "MAN"|"BK"|"QNS"|"BX"|"SI" or ""
     arrival_epoch: int
     seconds_until: int
     display: str  # "now" or "3 min" — JS may overwrite on per-second tick
@@ -131,8 +126,8 @@ def _to_row(a: Arrival, now: int) -> TrainRow:
     secs = max(0, a.arrival_epoch - now)
     is_express = bool(a.route_id) and a.route_id.endswith("X") and len(a.route_id) > 1
     display_route = a.route_id[:-1] if is_express else a.route_id
-    terminus = registry.get(a.terminus_stop_id)
-    borough_short = BOROUGH_SHORT.get(terminus.borough, "") if terminus else ""
+    platform_label = registry.direction_label(a.parent_stop_id, a.direction)
+    dir_short = direction_borough_short(platform_label)
     return TrainRow(
         route=display_route,
         route_color=color_for(a.route_id),
@@ -140,7 +135,7 @@ def _to_row(a: Arrival, now: int) -> TrainRow:
         is_express=is_express,
         direction=a.direction,
         terminus_name=registry.name(a.terminus_stop_id),
-        terminus_borough_short=borough_short,
+        direction_borough_short=dir_short,
         arrival_epoch=a.arrival_epoch,
         seconds_until=secs,
         display=format_eta(secs),

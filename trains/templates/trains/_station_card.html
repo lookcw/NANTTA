@@ -16,7 +16,7 @@
         <li class="train">
           <span class="bullet{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
           <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
-          {% if row.terminus_borough_short %}<span class="train__dir">{{ row.terminus_borough_short }}</span>{% endif %}
+          {% if row.direction_borough_short %}<span class="train__dir">{{ row.direction_borough_short }}</span>{% endif %}
           <span class="train__dest">{{ row.terminus_name }}</span>
         </li>
       {% empty %}
@@ -29,7 +29,7 @@
         <li class="chip">
           <span class="bullet bullet--sm{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
           <span class="chip__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
-          {% if row.terminus_borough_short %}<span class="chip__dir">{{ row.terminus_borough_short }}</span>{% endif %}
+          {% if row.direction_borough_short %}<span class="chip__dir">{{ row.direction_borough_short }}</span>{% endif %}
         </li>
       {% empty %}
         <li class="chip chip--empty">no upcoming trains</li>
