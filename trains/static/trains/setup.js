@@ -433,12 +433,12 @@
           ["*", "Both", "Both directions"],
         ].forEach(([dir, text, title]) => {
           const btn = el("button", {
-            attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false", disabled: isOn ? null : "" },
+            attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false" },
             dataset: { dir },
             text,
             on: { click: () => { if (isOn) setLineDir(sub, line, dir); } },
           });
-          if (!isOn) btn.disabled = true;
+          btn.disabled = !isOn;
           dirGroup.appendChild(btn);
         });
 
