@@ -1,11 +1,10 @@
-"""HTTP endpoints for arrivals, the wall display, and the setup UI."""
+"""HTTP endpoints for arrivals, the React SPA shell, and the JSON APIs."""
 
 from __future__ import annotations
 
 import json
 import time
 from pathlib import Path
-from urllib.parse import urlencode
 
 from django.conf import settings
 from django.http import (
@@ -18,7 +17,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from .cache import cache
-from .render import card_payload, feed_age_seconds, render_card
+from .render import card_payload, feed_age_seconds
 from .stations import registry
 from .subscriptions import LineSpec, Subscription, parse as parse_subs
 
@@ -115,96 +114,6 @@ def _read_legacy_hide_dest(request: HttpRequest) -> bool:
 def _read_font_size(request: HttpRequest) -> str:
     raw = (request.GET.get("f") or "m").strip().lower()
     return raw if raw in ("s", "m", "l") else "m"
-
-
-def _sub_to_url_value(sub) -> str:
-    """Canonical URL form for a Subscription's ``s=`` param.
-
-    - All complex lines + same direction + all show_dest=True → ``cx<id>[:<dir>]`` shorthand
-    - Otherwise → ``cx<id>:line1=dir1[-],line2=dir2[-],...``
-    """
-    cx = registry.get_complex(sub.complex_id)
-    if cx is None or not sub.line_specs:
-        return f"cx{sub.complex_id}"
-
-    dirs = {ls.direction for ls in sub.line_specs}
-    sub_lines = {ls.line for ls in sub.line_specs}
-    all_show = all(ls.show_dest for ls in sub.line_specs)
-    if all_show and sub_lines == set(cx.lines) and len(dirs) == 1:
-        only_dir = next(iter(dirs))
-        return f"cx{sub.complex_id}" if only_dir == "*" else f"cx{sub.complex_id}:{only_dir}"
-
-    parts = [f"{ls.line}={ls.direction}{'' if ls.show_dest else '-'}" for ls in sub.line_specs]
-    return f"cx{sub.complex_id}:" + ",".join(parts)
-
-
-@require_GET
-def display(request: HttpRequest):
-    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
-    if _read_legacy_hide_dest(request):
-        subs = _apply_legacy_hide_dest(subs)
-    font_size = _read_font_size(request)
-    n = _read_n(request, default=3)
-    now = int(time.time())
-    cards = [render_card(s, now=now, limit=n) for s in subs]
-
-    common_params: list[tuple[str, str]] = [("s", _sub_to_url_value(s)) for s in subs]
-    common_params.append(("n", str(n)))
-    common_params.append(("f", font_size))
-    # Min-mins is per-complex; emit one m= per distinct (complex, mins) pair.
-    seen_mins: set[str] = set()
-    for s in subs:
-        if s.min_mins and s.complex_id not in seen_mins:
-            common_params.append(("m", f"cx{s.complex_id}:{s.min_mins}"))
-            seen_mins.add(s.complex_id)
-
-    return render(request, "trains/display.html", {
-        "subs": subs,
-        "cards": cards,
-        "stream_url": f"/display/stream?{urlencode(common_params)}" if subs else "",
-        "setup_url": f"/setup?{urlencode(common_params)}" if subs else "/setup",
-        "feed_age": feed_age_seconds(now),
-        "trains_per_card": n,
-        "font_size": font_size,
-    })
-
-
-def display_stream(request: HttpRequest):
-    """SSE endpoint pushing Turbo Stream updates for every subscribed card."""
-    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
-    if not subs:
-        return HttpResponseBadRequest("missing 's' subscriptions")
-    if _read_legacy_hide_dest(request):
-        subs = _apply_legacy_hide_dest(subs)
-    n = _read_n(request, default=3)
-
-    interval = float(request.GET.get("interval", "5"))
-    interval = max(1.0, min(interval, 30.0))
-
-    def event_stream():
-        while True:
-            now = int(time.time())
-            payload_parts: list[str] = []
-            for s in subs:
-                html = render_card(s, now=now, limit=n)
-                payload_parts.append(
-                    f'<turbo-stream action="replace" target="{s.card_id}">'
-                    f'<template>{html}</template></turbo-stream>'
-                )
-            # SSE: collapse any newlines in the payload into one "data:" line
-            # by emitting each line as its own data: field per the SSE spec.
-            data = "".join(payload_parts)
-            lines = data.split("\n")
-            yield "event: message\n"
-            for line in lines:
-                yield f"data: {line}\n"
-            yield "\n"
-            time.sleep(interval)
-
-    resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
-    resp["Cache-Control"] = "no-cache"
-    resp["X-Accel-Buffering"] = "no"
-    return resp
 
 
 def _complex_catalog() -> list[dict]:
@@ -306,14 +215,6 @@ def api_display_stream(request: HttpRequest):
     resp["Cache-Control"] = "no-cache"
     resp["X-Accel-Buffering"] = "no"
     return resp
-
-
-@require_GET
-def setup(request: HttpRequest):
-    """Render the setup page with the complex list embedded as JSON."""
-    return render(request, "trains/setup.html", {
-        "stations_json": json.dumps(_complex_catalog()),
-    })
 
 
 def _vite_assets() -> dict:

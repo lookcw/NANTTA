@@ -1,19 +1,13 @@
-"""Shared rendering helpers for the wall display.
+"""Card-payload builders for the React display.
 
-Subscriptions are per-stop in URLs/localStorage. Right before rendering, we
-group them by ``(complex_id, direction)`` so all subscribed platforms in a
-transfer complex merge into one card.
-
-Both the initial page render and the SSE Turbo Stream updates build their HTML
-through ``render_card`` so they're guaranteed to stay in sync.
-"""
+``upcoming`` merges arrivals across every stop in a subscription's complex,
+filters by per-line direction + per-complex min-mins, and produces the
+``TrainRow``s that ``card_payload`` packs into the JSON the API returns."""
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass  # noqa: F401 — used by TrainRow below
-
-from django.template.loader import render_to_string
 
 from .cache import cache
 from .line_colors import color_for, text_color_for
@@ -163,32 +157,6 @@ def card_payload(
             for r in rows
         ],
     }
-
-
-def render_card(
-    sub: Subscription,
-    now: int | None = None,
-    limit: int = 3,
-) -> str:
-    if now is None:
-        now = int(time.time())
-    cx = registry.get_complex(sub.complex_id)
-    rows = upcoming(sub, now=now, limit=limit)
-    # If every row on the card hides its destination, fall back to the
-    # compact chip layout for density. Mixed cards use the per-row "trains"
-    # layout with each row's destination shown or hidden individually.
-    any_show_dest = any(r.show_dest for r in rows) if rows else True
-    ctx = {
-        "sub": sub,
-        "complex": cx,
-        # No card-level direction subtitle in the per-line model — each train
-        # chip carries its own borough badge instead.
-        "direction_label": None,
-        "rows": rows,
-        "now": now,
-        "any_show_dest": any_show_dest,
-    }
-    return render_to_string("trains/_station_card.html", ctx)
 
 
 def feed_age_seconds(now: int | None = None) -> int | None:
