@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import time
+from pathlib import Path
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.http import (
     HttpRequest,
     HttpResponseBadRequest,
@@ -312,6 +314,41 @@ def setup(request: HttpRequest):
     return render(request, "trains/setup.html", {
         "stations_json": json.dumps(_complex_catalog()),
     })
+
+
+def _vite_assets() -> dict:
+    """Read the Vite manifest and return ``{js_entry, css_entries}`` paths
+    relative to STATIC_URL (the {% static %} tag prepends STATIC_URL + handles
+    WhiteNoise's content-hash post-processing).
+
+    Returns empty paths if the bundle hasn't been built yet so dev servers
+    don't 500 before the first ``npm run build``.
+    """
+    base = Path(settings.BASE_DIR) / "trains" / "static" / "trains" / "app"
+    manifest_path = base / ".vite" / "manifest.json"
+    try:
+        with manifest_path.open(encoding="utf-8") as f:
+            manifest = json.load(f)
+    except FileNotFoundError:
+        return {"js_entry": "", "css_entries": []}
+
+    # Vite key is the entry's input path relative to the Vite root. Our root
+    # is trains/frontend/ and the entry is index.html.
+    entry = manifest.get("index.html") or {}
+    js_file = entry.get("file") or ""
+    css_files = entry.get("css") or []
+    prefix = "trains/app/"
+    return {
+        "js_entry": f"{prefix}{js_file}" if js_file else "",
+        "css_entries": [f"{prefix}{p}" for p in css_files],
+    }
+
+
+@require_GET
+def spa_shell(request: HttpRequest):
+    """Serve the React SPA shell. Used by /v2/* in Phase 4 and (after the
+    Phase 5 cutover) by /, /setup, and /display."""
+    return render(request, "trains/spa.html", _vite_assets())
 
 
 @require_GET

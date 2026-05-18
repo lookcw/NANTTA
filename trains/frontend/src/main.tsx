@@ -13,9 +13,13 @@ if (!container) {
   throw new Error("missing #app mount node");
 }
 
+// During the Phase 4 preview the SPA is mounted under /v2/*. Phase 5 swaps it
+// onto the bare routes, at which point the basename collapses to "/".
+const basename = window.location.pathname.startsWith("/v2") ? "/v2" : "/";
+
 createRoot(container).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basename}>
       <App />
     </BrowserRouter>
   </StrictMode>,

@@ -1,0 +1,14 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NANTTA</title>
+  {% for css in css_entries %}<link rel="stylesheet" href="{% static css %}">{% endfor %}
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="{% static js_entry %}"></script>
+</body>
+</html>
