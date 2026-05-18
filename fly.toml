@@ -18,6 +18,7 @@ primary_region = "ewr"
 [env]
   NANTTA_DEBUG = "0"
   PORT = "8000"
+  NANTTA_RUN_POLLER = "1"
 
 [http_service]
   internal_port = 8000
@@ -33,6 +34,11 @@ primary_region = "ewr"
     method = "GET"
     timeout = "5s"
     path = "/api/health"
+    # Send a real Host header so Django's ALLOWED_HOSTS check passes — without
+    # this, Fly's internal Consul check sends Host: <private-ip>:8000 which
+    # Django rejects with 400. Per https://community.fly.io/t/22709.
+    [http_service.checks.headers]
+      Host = "nantta.fly.dev"
 
 [[vm]]
   size = "shared-cpu-1x"
