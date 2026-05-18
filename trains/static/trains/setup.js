@@ -212,12 +212,21 @@
       const st = STATIONS_BY_ID[sub.id];
       if (!st) return;
 
+      // Direction toggle. Button labels are borough codes (MAN/BK/BX/QNS/SI)
+      // derived from the platform's direction label — clearer than N/S. We
+      // fall back to N/S when the label doesn't resolve to a borough (terminal
+      // stations) so there's always *something* to click.
       const dirToggle = el("div", { class: "dir-toggle", attrs: { role: "radiogroup" } });
-      [["N", st.n_label || "Northbound"], ["S", st.s_label || "Southbound"], ["*", "Both"]].forEach(([dir, label]) => {
+      const entries = [
+        ["N", st.n_short || "N", st.n_label || "Northbound"],
+        ["S", st.s_short || "S", st.s_label || "Southbound"],
+        ["*", "Both", "Both directions"],
+      ];
+      entries.forEach(([dir, text, title]) => {
         const btn = el("button", {
-          attrs: { type: "button", title: label, "aria-pressed": sub.dir === dir ? "true" : "false" },
+          attrs: { type: "button", title, "aria-pressed": sub.dir === dir ? "true" : "false" },
           dataset: { dir },
-          text: dir === "*" ? "Both" : dir,
+          text,
           on: { click: () => setDirection(idx, dir) },
         });
         dirToggle.appendChild(btn);

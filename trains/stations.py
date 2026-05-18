@@ -42,6 +42,41 @@ BOROUGH_NAMES = {
 }
 
 
+# Keyword → 3-letter borough code. Specific neighborhoods first so things like
+# "Coney Island - Bay Ridge" classify as Brooklyn even though Manhattan-bound
+# trains might also touch Manhattan in their label. Order matters.
+_LABEL_BOROUGH_KEYWORDS: tuple[tuple[str, str], ...] = (
+    ("coney island", "BK"),
+    ("bay ridge", "BK"),
+    ("flatbush", "BK"),
+    ("brooklyn", "BK"),
+    ("astoria", "QNS"),
+    ("flushing", "QNS"),
+    ("forest hills", "QNS"),
+    ("jamaica", "QNS"),
+    ("rockaway", "QNS"),
+    ("queens", "QNS"),
+    ("the bronx", "BX"),
+    ("bronx", "BX"),
+    ("staten", "SI"),
+    ("manhattan", "MAN"),
+    ("uptown", "BX"),    # paired labels like "Uptown & The Bronx" — Bronx wins above
+    ("downtown", "MAN"),
+)
+
+
+def direction_borough_short(label: str | None) -> str:
+    """Return a 3-letter borough code (MAN/BK/BX/QNS/SI) derived from an MTA
+    direction label string. Empty string when no keyword matches."""
+    if not label:
+        return ""
+    lower = label.lower()
+    for needle, code in _LABEL_BOROUGH_KEYWORDS:
+        if needle in lower:
+            return code
+    return ""
+
+
 @dataclass(frozen=True, slots=True)
 class Station:
     stop_id: str

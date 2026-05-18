@@ -145,11 +145,27 @@ html, body {
    Bullet and ETA dominate; destination is a caption. */
 .train {
   display: grid;
-  grid-template-columns: 52px minmax(5.5ch, max-content) 1fr;
+  grid-template-columns: 52px minmax(5.5ch, max-content) max-content 1fr;
   align-items: baseline;
   gap: 14px;
   padding: 4px 0;
 }
+.train__dir {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 2px 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  align-self: center;
+}
+.train:has(.train__dir) {
+  /* nothing extra — grid already reserves the column */
+}
+/* When direction badge is absent, the destination should fill its column —
+   the empty third grid track collapses naturally with max-content + no content. */
 /* Chip mode (d=0, no destinations) — chips wrap horizontally inside the card. */
 .chips {
   list-style: none;

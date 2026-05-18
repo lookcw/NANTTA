@@ -173,6 +173,7 @@ def setup(request: HttpRequest):
             raw = json.load(f)
     except FileNotFoundError:
         raw = {}
+    from .stations import direction_borough_short
     stops_raw = raw.get("stops") or {}
     stations_list = []
     for stop_id, row in stops_raw.items():
@@ -183,6 +184,8 @@ def setup(request: HttpRequest):
             "lines": row.get("lines") or [],
             "n_label": row.get("north_label"),
             "s_label": row.get("south_label"),
+            "n_short": direction_borough_short(row.get("north_label")),
+            "s_short": direction_borough_short(row.get("south_label")),
         })
     stations_list.sort(key=lambda s: s["name"])
     return render(request, "trains/setup.html", {
