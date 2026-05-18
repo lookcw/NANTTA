@@ -16,3 +16,4 @@ setup-*.png
 .idea/
 .vscode/
 README.md
+node_modules/

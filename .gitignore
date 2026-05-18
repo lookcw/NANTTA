@@ -13,3 +13,7 @@ staticfiles/
 display-*.png
 setup-*.png
 
+# Frontend build artifacts
+node_modules/
+trains/static/trains/app/
+*.tsbuildinfo
