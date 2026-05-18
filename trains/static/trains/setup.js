@@ -51,9 +51,11 @@
     return wrap;
   }
 
-  // ---------- Init from URL ----------
-  function initFromUrl() {
-    const params = new URLSearchParams(window.location.search);
+  // ---------- Init from URL or localStorage ----------
+  const STORAGE_KEY = "nantta.config";
+
+  function loadFromUrl(params) {
+    let loaded = false;
     params.getAll("s").forEach((raw) => {
       const [id, dRaw] = raw.split(":");
       const d = (dRaw || "*").toUpperCase();
@@ -61,11 +63,54 @@
       if (!["N", "S", "*"].includes(d)) return;
       if (state.subs.some((x) => x.id === id && x.dir === d)) return;
       state.subs.push({ id, dir: d });
+      loaded = true;
     });
     const n = parseInt(params.get("n"), 10);
-    if (Number.isFinite(n)) state.n = Math.max(1, Math.min(n, 20));
+    if (Number.isFinite(n)) { state.n = Math.max(1, Math.min(n, 20)); loaded = true; }
     const dParam = params.get("d");
-    if (dParam === "0" || dParam === "false" || dParam === "no") state.showDest = false;
+    if (dParam != null) {
+      state.showDest = !(dParam === "0" || dParam === "false" || dParam === "no");
+      loaded = true;
+    }
+    return loaded;
+  }
+
+  function loadFromStorage() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const cfg = JSON.parse(raw);
+      if (Array.isArray(cfg.subs)) {
+        cfg.subs.forEach((s) => {
+          if (!s || !STATIONS_BY_ID[s.id]) return;
+          if (!["N", "S", "*"].includes(s.dir)) return;
+          if (state.subs.some((x) => x.id === s.id && x.dir === s.dir)) return;
+          state.subs.push({ id: s.id, dir: s.dir });
+        });
+      }
+      if (Number.isFinite(cfg.n)) state.n = Math.max(1, Math.min(cfg.n, 20));
+      if (typeof cfg.showDest === "boolean") state.showDest = cfg.showDest;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        subs: state.subs,
+        n: state.n,
+        showDest: state.showDest,
+      }));
+    } catch (_) { /* quota / private mode — ignore */ }
+  }
+
+  function initFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    // URL wins when present; otherwise fall back to localStorage.
+    const fromUrl = loadFromUrl(params);
+    if (!fromUrl) loadFromStorage();
   }
 
   // ---------- Search ----------
@@ -269,6 +314,7 @@
     renderSelected();
     syncOptions();
     renderUrl();
+    saveToStorage();
   }
 
   initFromUrl();

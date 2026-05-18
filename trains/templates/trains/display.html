@@ -6,6 +6,45 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>NANTTA — NYC Subway Wall Display</title>
   <link rel="stylesheet" href="{% static 'trains/style.css' %}">
+  <script>
+    // localStorage round-trip:
+    //  - If there ARE subs in the URL, save them so the next bare visit
+    //    restores this config.
+    //  - If there are NO subs in the URL and localStorage has a saved config,
+    //    redirect to /display with those params before any rendering.
+    (function () {
+      var KEY = "nantta.config";
+      {% if subs %}
+      try {
+        var subsFromServer = [
+          {% for s in subs %}{ id: "{{ s.stop_id|escapejs }}", dir: "{{ s.direction|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}
+        ];
+        localStorage.setItem(KEY, JSON.stringify({
+          subs: subsFromServer,
+          n: {{ trains_per_card }},
+          showDest: {% if show_destination %}true{% else %}false{% endif %}
+        }));
+      } catch (_) { /* ignore */ }
+      {% else %}
+      try {
+        var raw = localStorage.getItem(KEY);
+        if (!raw) return;
+        var cfg = JSON.parse(raw);
+        if (!cfg || !Array.isArray(cfg.subs) || !cfg.subs.length) return;
+        var params = new URLSearchParams();
+        cfg.subs.forEach(function (s) {
+          if (s && s.id && ["N", "S", "*"].indexOf(s.dir) !== -1) {
+            params.append("s", s.id + ":" + s.dir);
+          }
+        });
+        if (Number.isFinite(cfg.n)) params.set("n", String(cfg.n));
+        if (typeof cfg.showDest === "boolean") params.set("d", cfg.showDest ? "1" : "0");
+        if (!params.getAll("s").length) return;
+        window.location.replace("/display?" + params.toString());
+      } catch (_) { /* ignore */ }
+      {% endif %}
+    })();
+  </script>
   <script type="module" src="https://unpkg.com/@hotwired/turbo@8.0.5/dist/turbo.es2017-esm.js"></script>
   <script src="{% static 'trains/countdown.js' %}" defer></script>
 </head>
