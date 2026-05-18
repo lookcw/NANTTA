@@ -1,4 +1,25 @@
 # syntax=docker/dockerfile:1.7
+
+# ---------- Stage 1: build the React bundle ----------
+FROM node:20-slim AS frontend
+
+WORKDIR /app
+
+# Install JS deps first so source changes don't bust the layer cache.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# tsc + vite need the TS configs and the source tree. The Vite entry imports
+# trains/static/trains/style.css, so we copy the static tree too.
+COPY tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts ./
+COPY trains/frontend ./trains/frontend
+COPY trains/static ./trains/static
+
+RUN npm run build
+# Build output lands in /app/trains/static/trains/app (manifest + hashed assets).
+
+
+# ---------- Stage 2: Django runtime ----------
 FROM python:3.13-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -20,6 +41,9 @@ RUN pip install -r requirements.txt
 
 # Copy the rest of the source.
 COPY . .
+
+# Overlay the React bundle produced by the frontend stage.
+COPY --from=frontend /app/trains/static/trains/app ./trains/static/trains/app
 
 # Build static assets into STATIC_ROOT for WhiteNoise to serve.
 RUN NANTTA_SECRET_KEY=build-only NANTTA_DEBUG=0 \
