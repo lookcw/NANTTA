@@ -1,28 +1,42 @@
 {% load static %}
-<article class="card" id="{{ sub.card_id }}" data-stop-id="{{ sub.stop_id }}" data-direction="{{ sub.direction }}">
+<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ sub.card_id }}" data-stop-id="{{ sub.stop_id }}" data-direction="{{ sub.direction }}">
   <header class="card__header">
     <h2 class="card__name">{{ station.name|default:sub.stop_id }}</h2>
     <div class="card__sub">
-      {% if direction_label %}
-        <span class="card__dir">to {{ direction_label }}</span>
-      {% elif sub.direction == 'N' or sub.direction == 'S' %}
-        <span class="card__dir card__dir--terminal">terminal</span>
-      {% else %}
-        <span class="card__dir">both directions</span>
+      {% if sub.direction == 'N' or sub.direction == 'S' %}
+        {% if direction_label %}
+          <span class="card__dir">to {{ direction_label }}</span>
+        {% else %}
+          <span class="card__dir card__dir--terminal">terminal</span>
+        {% endif %}
       {% endif %}
       {% if station.borough %}<span class="card__borough">{{ station.borough }}</span>{% endif %}
     </div>
   </header>
 
-  <ul class="trains">
-    {% for row in rows %}
-      <li class="train{% if not show_dest %} train--compact{% endif %}">
-        <span class="bullet{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
-        <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
-        {% if show_dest %}<span class="train__dest">{{ row.terminus_name }}</span>{% endif %}
-      </li>
-    {% empty %}
-      <li class="train train--empty">no upcoming trains</li>
-    {% endfor %}
-  </ul>
+  {% if show_dest %}
+    <ul class="trains">
+      {% for row in rows %}
+        <li class="train">
+          <span class="bullet{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
+          <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
+          <span class="train__dest">{{ row.terminus_name }}</span>
+        </li>
+      {% empty %}
+        <li class="train train--empty">no upcoming trains</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <ul class="chips">
+      {% for row in rows %}
+        <li class="chip">
+          <span class="bullet bullet--sm{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
+          <span class="chip__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
+          {% if sub.direction == '*' and row.terminus_borough_short %}<span class="chip__dir">{{ row.terminus_borough_short }}</span>{% endif %}
+        </li>
+      {% empty %}
+        <li class="chip chip--empty">no upcoming trains</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
 </article>

@@ -105,10 +105,15 @@ def display(request: HttpRequest):
     stream_params.append(("n", str(n)))
     stream_params.append(("d", "1" if show_dest else "0"))
     stream_qs = urlencode(stream_params)
+    setup_qs = urlencode(
+        [("s", f"{s.stop_id}:{s.direction}") for s in subs]
+        + [("n", str(n)), ("d", "1" if show_dest else "0")]
+    )
     return render(request, "trains/display.html", {
         "subs": subs,
         "cards": cards,
         "stream_url": f"/display/stream?{stream_qs}" if subs else "",
+        "setup_url": f"/setup?{setup_qs}" if subs else "/setup",
         "feed_age": feed_age_seconds(now),
         "trains_per_card": n,
         "show_destination": show_dest,

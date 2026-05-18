@@ -53,6 +53,18 @@ html, body {
   padding: 4px 10px;
   border-radius: 4px;
 }
+.gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  text-decoration: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.gear:hover { color: var(--accent); border-color: var(--panel-border); }
 
 .empty {
   padding: 80px 32px;
@@ -80,31 +92,38 @@ html, body {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
-  padding: 16px 22px 14px;
+  padding: 12px 18px 12px;
   display: flex;
   flex-direction: column;
 }
+.card--compact { padding: 10px 14px 10px; }
 .card__header {
   border-bottom: 1px solid var(--panel-border);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   margin-bottom: 8px;
 }
+.card--compact .card__header {
+  padding-bottom: 4px;
+  margin-bottom: 6px;
+}
 .card__name {
-  margin: 0 0 2px;
-  font-size: 22px;
+  margin: 0;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 .card__sub {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-top: 2px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
+.card__sub:empty { display: none; }
 .card__dir { color: var(--accent); }
 .card__dir--terminal { color: var(--text-dim); font-style: italic; }
 .card__borough::before {
@@ -131,9 +150,45 @@ html, body {
   gap: 14px;
   padding: 4px 0;
 }
-.train--compact {
-  grid-template-columns: 52px minmax(5.5ch, max-content);
-  padding: 2px 0;
+/* Chip mode (d=0, no destinations) — chips wrap horizontally inside the card. */
+.chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  line-height: 1;
+}
+.chip__eta {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.chip__dir {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  padding: 2px 6px;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+}
+.chip--empty {
+  color: var(--text-dimmer);
+  font-style: italic;
+  background: transparent;
+  padding: 4px 0;
+  font-size: 14px;
 }
 .train--empty {
   color: var(--text-dimmer);
@@ -153,6 +208,7 @@ html, body {
   font-size: 26px;
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 .bullet__label { display: inline-block; line-height: 1; }
 .bullet--express {
@@ -161,6 +217,11 @@ html, body {
 }
 .bullet--express .bullet__label {
   transform: rotate(-45deg);
+}
+.bullet--sm {
+  width: 32px;
+  height: 32px;
+  font-size: 18px;
 }
 .train__eta {
   font-size: 38px;
