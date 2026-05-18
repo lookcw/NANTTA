@@ -2,3 +2,5 @@ Django>=5.1,<6
 gtfs-realtime-bindings>=1.0
 requests>=2.32
 APScheduler>=3.10
+gunicorn>=23.0
+whitenoise>=6.7

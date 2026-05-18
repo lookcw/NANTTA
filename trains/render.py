@@ -20,9 +20,10 @@ from .subscriptions import Subscription
 
 @dataclass(frozen=True, slots=True)
 class TrainRow:
-    route: str
+    route: str             # display label ("6", "7" — express "X" stripped)
     route_color: str
     route_text_color: str
+    is_express: bool       # true for routes whose ID ended in 'X' (e.g. 6X, 7X)
     direction: str
     terminus_name: str
     arrival_epoch: int
@@ -44,10 +45,13 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
 
 def _to_row(a: Arrival, now: int) -> TrainRow:
     secs = max(0, a.arrival_epoch - now)
+    is_express = bool(a.route_id) and a.route_id.endswith("X") and len(a.route_id) > 1
+    display_route = a.route_id[:-1] if is_express else a.route_id
     return TrainRow(
-        route=a.route_id,
+        route=display_route,
         route_color=color_for(a.route_id),
         route_text_color=text_color_for(a.route_id),
+        is_express=is_express,
         direction=a.direction,
         terminus_name=registry.name(a.terminus_stop_id),
         arrival_epoch=a.arrival_epoch,

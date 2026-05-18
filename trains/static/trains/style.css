@@ -154,6 +154,14 @@ html, body {
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   letter-spacing: -0.02em;
 }
+.bullet__label { display: inline-block; line-height: 1; }
+.bullet--express {
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+.bullet--express .bullet__label {
+  transform: rotate(-45deg);
+}
 .train__eta {
   font-size: 38px;
   font-weight: 800;

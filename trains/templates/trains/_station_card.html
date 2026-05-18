@@ -17,7 +17,7 @@
   <ul class="trains">
     {% for row in rows %}
       <li class="train{% if not show_dest %} train--compact{% endif %}">
-        <span class="bullet" style="background:{{ row.route_color }};color:{{ row.route_text_color }};">{{ row.route }}</span>
+        <span class="bullet{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
         <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
         {% if show_dest %}<span class="train__dest">{{ row.terminus_name }}</span>{% endif %}
       </li>
