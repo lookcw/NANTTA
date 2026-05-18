@@ -39,28 +39,24 @@
     <section class="panel panel--options">
       <h2>Display options</h2>
 
-      <div class="option">
-        <label for="opt-n">Trains per card</label>
-        <div class="option__control">
+      <div class="options-grid">
+        <div class="option option--inline">
+          <label for="opt-n">Trains per card</label>
           <input id="opt-n" type="number" min="1" max="20" step="1" value="3">
         </div>
-        <p class="option__hint">Max 20. Default jumps to 6 when destinations are hidden.</p>
-      </div>
-
-      <div class="option">
-        <label class="switch">
-          <input id="opt-d" type="checkbox" checked>
-          <span>Show destination</span>
-        </label>
-        <p class="option__hint">When off, rows are more compact and more trains fit.</p>
-      </div>
-
-      <div class="option">
-        <label>Text size</label>
-        <div id="size-toggle" class="size-toggle" role="radiogroup">
-          <button type="button" data-size="s" aria-pressed="false">Small</button>
-          <button type="button" data-size="m" aria-pressed="true">Medium</button>
-          <button type="button" data-size="l" aria-pressed="false">Large</button>
+        <div class="option option--inline">
+          <label class="switch">
+            <input id="opt-d" type="checkbox" checked>
+            <span>Show destination</span>
+          </label>
+        </div>
+        <div class="option option--inline">
+          <label>Text size</label>
+          <div id="size-toggle" class="size-toggle" role="radiogroup">
+            <button type="button" data-size="s" aria-pressed="false">S</button>
+            <button type="button" data-size="m" aria-pressed="true">M</button>
+            <button type="button" data-size="l" aria-pressed="false">L</button>
+          </div>
         </div>
       </div>
 
@@ -73,5 +69,10 @@
       <p id="open-disabled" class="muted">Add at least one station to open the display.</p>
     </section>
   </main>
+
+  <footer class="page-footer">
+    <span class="page-footer__brand">NANTTA</span>
+    <span class="page-footer__expand">Not Another NYC Train Time App</span>
+  </footer>
 </body>
 </html>
