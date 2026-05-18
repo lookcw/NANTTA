@@ -19,6 +19,7 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "tnum" 1, "ss01" 1;
+  overflow-x: hidden;
 }
 
 .display__header {
@@ -83,7 +84,9 @@ html, body {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  /* min(420px, 100%) so cards shrink to viewport width on mobile rather than
+     overflowing horizontally. */
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   gap: 14px;
   padding: 14px 20px 24px;
 }
@@ -183,6 +186,7 @@ html, body {
   background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
   line-height: 1;
+  min-width: 0;          /* allow chips to shrink instead of overflowing */
 }
 .chip__eta {
   font-size: 22px;
@@ -263,6 +267,31 @@ html, body {
   .train__eta { font-size: 44px; }
   .bullet { width: 54px; height: 54px; font-size: 28px; }
   .train__dest { font-size: 14px; }
+}
+
+/* Phone-sized viewports — tighten everything so a single card fits without
+   horizontal scroll and chips wrap to multiple lines. */
+@media (max-width: 480px) {
+  .display__header {
+    padding: 10px 14px 8px;
+  }
+  .display__header h1 { font-size: 15px; letter-spacing: 0.15em; }
+  .display__meta { gap: 10px; font-size: 14px; }
+  .grid { padding: 10px 12px 20px; gap: 10px; }
+  .card { padding: 12px 14px; }
+  .card--compact { padding: 10px 12px; }
+  .card__name { font-size: 17px; }
+  .card__sub { font-size: 10px; gap: 8px; }
+  .train { grid-template-columns: 44px minmax(5ch, max-content) max-content 1fr; gap: 10px; }
+  .train__eta { font-size: 30px; }
+  .train__dest { font-size: 12px; }
+  .train__dir { font-size: 10px; padding: 1px 5px; }
+  .bullet { width: 40px; height: 40px; font-size: 22px; }
+  .bullet--sm { width: 28px; height: 28px; font-size: 16px; }
+  .chip__eta { font-size: 18px; }
+  .chip { padding: 3px 10px 3px 3px; gap: 6px; }
+  .gear { width: 28px; height: 28px; }
+  .gear svg { width: 18px; height: 18px; }
 }
 
 /* ============== Setup page ============== */
