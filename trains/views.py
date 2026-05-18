@@ -268,6 +268,44 @@ def _complex_catalog() -> list[dict]:
     return complexes_list
 
 
+def api_display_stream(request: HttpRequest):
+    """SSE endpoint pushing JSON card payloads — React counterpart to /display/stream.
+
+    Same cadence and same subscription parsing as the Turbo SSE; the only
+    difference is the payload shape (JSON instead of <turbo-stream> HTML).
+    """
+    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
+    if not subs:
+        return HttpResponseBadRequest("missing 's' subscriptions")
+    if _read_legacy_hide_dest(request):
+        subs = _apply_legacy_hide_dest(subs)
+    n = _read_n(request, default=3)
+
+    interval = float(request.GET.get("interval", "5"))
+    interval = max(1.0, min(interval, 30.0))
+
+    def event_stream():
+        while True:
+            now = int(time.time())
+            payload = {
+                "server_now": now,
+                "feed_age_seconds": feed_age_seconds(now),
+                "subs": [card_payload(s, now=now, limit=n) for s in subs],
+            }
+            # JSON has no embedded newlines once compactly encoded, so the
+            # message fits in a single SSE data: line.
+            data = json.dumps(payload, separators=(",", ":"))
+            yield "event: message\n"
+            yield f"data: {data}\n"
+            yield "\n"
+            time.sleep(interval)
+
+    resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    resp["Cache-Control"] = "no-cache"
+    resp["X-Accel-Buffering"] = "no"
+    return resp
+
+
 @require_GET
 def setup(request: HttpRequest):
     """Render the setup page with the complex list embedded as JSON."""
