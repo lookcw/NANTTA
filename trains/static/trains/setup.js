@@ -19,13 +19,12 @@
   // Subscription shape:
   //   { cx: complex_id,
   //     mins: 0,
-  //     lines: [ { line, dir }, ... ]   // only included lines; unchecked = removed }
+  //     lines: [ { line, dir, showDest }, ... ]   // only included lines; unchecked = removed }
   // Empty lines array = no lines = nothing to show.
   const state = {
     subs: [],
     expanded: {},     // { complex_id: true } — UI-only, not persisted
     n: 3,
-    showDest: true,
     fontSize: "m",
   };
 
@@ -47,7 +46,7 @@
       // For terminal lines, default to the alive direction so the UI doesn't
       // dangle a useless "*" / opposite-direction choice.
       const alive = aliveDirection(complex, line);
-      return { line, dir: alive || "*" };
+      return { line, dir: alive || "*", showDest: true };
     });
   }
 
@@ -98,16 +97,22 @@
   const STORAGE_KEY = "nantta.config";
 
   function _parseLineSpecPart(spec, complex) {
-    // spec is the post-colon part: "N" | "1=N,2=S" | "" | "1,2,3" etc.
+    // spec is the post-colon part: "N" | "1=N,2=S" | "" | "1,2,3" | "1=N-,2=S" etc.
+    // A trailing "-" on an entry means "hide destination" for that line.
     if (!spec) return defaultLineSpecs(complex);
     if (["N", "S", "*"].includes(spec)) {
-      return complex.lines.map((line) => ({ line, dir: spec }));
+      return complex.lines.map((line) => ({ line, dir: spec, showDest: true }));
     }
     const validLines = new Set(complex.lines);
     const out = [];
     spec.split(",").forEach((entry) => {
       entry = entry.trim();
       if (!entry) return;
+      let showDest = true;
+      if (entry.endsWith("-")) {
+        showDest = false;
+        entry = entry.slice(0, -1);
+      }
       let line, dir;
       if (entry.includes("=")) {
         [line, dir] = entry.split("=");
@@ -119,7 +124,7 @@
       }
       if (!validLines.has(line)) return;
       if (!["N", "S", "*"].includes(dir)) return;
-      out.push({ line, dir });
+      out.push({ line, dir, showDest });
     });
     return out.length ? out : defaultLineSpecs(complex);
   }
@@ -182,8 +187,11 @@
     });
     const n = parseInt(params.get("n"), 10);
     if (Number.isFinite(n)) state.n = Math.max(1, Math.min(n, 20));
+    // Legacy ``d=0`` was a global "hide destinations" toggle; apply per-line.
     const dParam = params.get("d");
-    if (dParam != null) state.showDest = !(dParam === "0" || dParam === "false" || dParam === "no");
+    if (dParam === "0" || dParam === "false" || dParam === "no") {
+      state.subs.forEach((sub) => { sub.lines.forEach((l) => { l.showDest = false; }); });
+    }
     const fParam = params.get("f");
     if (["s", "m", "l"].includes(fParam)) state.fontSize = fParam;
     return true;
@@ -194,10 +202,12 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return false;
       const cfg = JSON.parse(raw);
+      // Legacy ``cfg.showDest === false`` was a global toggle; apply per-line.
+      const legacyHideAll = cfg.showDest === false;
       if (Array.isArray(cfg.subs)) {
         cfg.subs.forEach((entry) => {
           if (!entry) return;
-          // New per-line shape: { cx, mins, lines: [{line, dir}, ...] }
+          // New per-line shape: { cx, mins, lines: [{line, dir, showDest?}, ...] }
           if (entry.cx && Array.isArray(entry.lines)) {
             const complex = COMPLEXES_BY_ID[entry.cx];
             if (!complex) return;
@@ -205,7 +215,11 @@
             const validLines = new Set(complex.lines);
             const lines = entry.lines
               .filter((l) => l && validLines.has(l.line) && ["N", "S", "*"].includes(l.dir))
-              .map((l) => ({ line: l.line, dir: l.dir }));
+              .map((l) => ({
+                line: l.line,
+                dir: l.dir,
+                showDest: legacyHideAll ? false : (l.showDest === false ? false : true),
+              }));
             const mins = Number.isFinite(entry.mins) ? Math.max(0, Math.min(entry.mins, 120)) : 0;
             state.subs.push({ cx: entry.cx, lines, mins });
             return;
@@ -219,7 +233,7 @@
             const sourceLines = Array.isArray(entry.lines) && entry.lines.length ? entry.lines : complex.lines;
             const lines = sourceLines
               .filter((l) => complex.lines.includes(l))
-              .map((l) => ({ line: l, dir }));
+              .map((l) => ({ line: l, dir, showDest: !legacyHideAll }));
             const mins = Number.isFinite(entry.mins) ? Math.max(0, Math.min(entry.mins, 120)) : 0;
             state.subs.push({ cx: entry.cx, lines, mins });
             return;
@@ -232,13 +246,12 @@
             const dir = ["N", "S", "*"].includes(entry.dir) ? entry.dir : "*";
             state.subs.push({
               cx, mins: 0,
-              lines: complex.lines.map((line) => ({ line, dir })),
+              lines: complex.lines.map((line) => ({ line, dir, showDest: !legacyHideAll })),
             });
           }
         });
       }
       if (Number.isFinite(cfg.n)) state.n = Math.max(1, Math.min(cfg.n, 20));
-      if (typeof cfg.showDest === "boolean") state.showDest = cfg.showDest;
       if (["s", "m", "l"].includes(cfg.fontSize)) state.fontSize = cfg.fontSize;
       return true;
     } catch (_) {
@@ -251,7 +264,6 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         subs: state.subs,
         n: state.n,
-        showDest: state.showDest,
         fontSize: state.fontSize,
       }));
     } catch (_) { /* quota / private mode — ignore */ }
@@ -343,7 +355,7 @@
   }
   function toggleLine(sub, line, complex) {
     const idx = sub.lines.findIndex((l) => l.line === line);
-    if (idx === -1) sub.lines.push({ line, dir: "*" });
+    if (idx === -1) sub.lines.push({ line, dir: "*", showDest: true });
     else sub.lines.splice(idx, 1);
     // Keep complex-line order for stable URL output.
     sub.lines.sort((a, b) => complex.lines.indexOf(a.line) - complex.lines.indexOf(b.line));
@@ -354,6 +366,13 @@
   function setLineDir(sub, line, dir) {
     const entry = sub.lines.find((l) => l.line === line);
     if (entry) entry.dir = dir;
+    renderSelected();
+    renderUrl();
+    saveToStorage();
+  }
+  function setLineShowDest(sub, line, showDest) {
+    const entry = sub.lines.find((l) => l.line === line);
+    if (entry) entry.showDest = !!showDest;
     renderSelected();
     renderUrl();
     saveToStorage();
@@ -472,9 +491,24 @@
           dirCell = dirGroup;
         }
 
+        // Per-line "show destination" toggle (sits alongside direction).
+        const destOn = entry ? entry.showDest !== false : true;
+        const destBtn = el("button", {
+          class: "line-row__dest-toggle" + (destOn ? " line-row__dest-toggle--on" : ""),
+          attrs: {
+            type: "button",
+            title: destOn ? "Hide destination on this line" : "Show destination on this line",
+            "aria-pressed": destOn ? "true" : "false",
+          },
+          text: destOn ? "Dest. on" : "Dest. off",
+          on: { click: () => { if (isOn) setLineShowDest(sub, line, !destOn); } },
+        });
+        destBtn.disabled = !isOn;
+
         row.appendChild(cbWrap);
         row.appendChild(bul);
         row.appendChild(dirCell);
+        row.appendChild(destBtn);
         lineList.appendChild(row);
       });
       body.appendChild(lineList);
@@ -486,17 +520,14 @@
 
   // ---------- Options ----------
   const nInput = document.getElementById("opt-n");
-  const dInput = document.getElementById("opt-d");
   nInput.addEventListener("input", () => {
     const v = parseInt(nInput.value, 10);
     if (Number.isFinite(v)) state.n = Math.max(1, Math.min(v, 20));
     renderUrl(); saveToStorage();
   });
   nInput.addEventListener("blur", () => { nInput.value = String(state.n); });
-  dInput.addEventListener("change", () => { state.showDest = dInput.checked; syncAll(); });
   function syncOptions() {
     if (document.activeElement !== nInput) nInput.value = String(state.n);
-    dInput.checked = state.showDest;
     document.querySelectorAll('#size-toggle button[data-size]').forEach((btn) => {
       btn.setAttribute("aria-pressed", btn.dataset.size === state.fontSize ? "true" : "false");
     });
@@ -529,11 +560,15 @@
     if (!sub.lines.length) return null;
     const dirs = new Set(sub.lines.map((l) => l.dir));
     const allLinesIncluded = sub.lines.length === cx.lines.length;
-    if (allLinesIncluded && dirs.size === 1) {
+    const allShowDest = sub.lines.every((l) => l.showDest !== false);
+    if (allShowDest && allLinesIncluded && dirs.size === 1) {
       const only = [...dirs][0];
       return only === "*" ? "cx" + sub.cx : "cx" + sub.cx + ":" + only;
     }
-    return "cx" + sub.cx + ":" + sub.lines.map((l) => l.line + "=" + l.dir).join(",");
+    return "cx" + sub.cx + ":" + sub.lines.map((l) => {
+      const suffix = l.showDest === false ? "-" : "";
+      return l.line + "=" + l.dir + suffix;
+    }).join(",");
   }
 
   function buildPath() {
@@ -546,7 +581,6 @@
       if (s.mins > 0) params.append("m", "cx" + s.cx + ":" + s.mins);
     });
     params.set("n", String(state.n));
-    params.set("d", state.showDest ? "1" : "0");
     params.set("f", state.fontSize);
     return "/display?" + params.toString();
   }

@@ -1,5 +1,5 @@
 {% load static %}
-<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ sub.card_id }}" data-complex-id="{{ sub.complex_id }}" data-direction="{{ sub.direction }}">
+<article class="card{% if not any_show_dest %} card--compact{% endif %}" id="{{ sub.card_id }}" data-complex-id="{{ sub.complex_id }}" data-direction="{{ sub.direction }}">
   <header class="card__header">
     <h2 class="card__name">{{ complex.name|default:complex.id }}</h2>
     <div class="card__sub">
@@ -10,14 +10,14 @@
     </div>
   </header>
 
-  {% if show_dest %}
+  {% if any_show_dest %}
     <ul class="trains">
       {% for row in rows %}
-        <li class="train">
+        <li class="train{% if not row.show_dest %} train--no-dest{% endif %}">
           <span class="bullet{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
           <span class="train__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
           {% if row.direction_borough_short %}<span class="train__dir">{{ row.direction_borough_short }}</span>{% endif %}
-          <span class="train__dest">{{ row.terminus_name }}</span>
+          {% if row.show_dest %}<span class="train__dest">{{ row.terminus_name }}</span>{% endif %}
         </li>
       {% empty %}
         <li class="train train--empty">no upcoming trains</li>

@@ -565,6 +565,20 @@ html, body {
     flex-wrap: wrap;
     justify-self: end;
   }
+  /* On narrow widths the per-line row gets a 2x2-ish grid: checkbox+bullet on
+     the top row with the dir toggle, dest toggle on its own line beneath. */
+  .line-row {
+    grid-template-columns: auto auto 1fr;
+    grid-template-areas:
+      "cb bullet dir"
+      "dest dest dest";
+    row-gap: 6px;
+  }
+  .line-row__cb { grid-area: cb; }
+  .line-row .mini-bullet { grid-area: bullet; }
+  .line-row > .dir-toggle--row,
+  .line-row__static-dir { grid-area: dir; }
+  .line-row__dest-toggle { grid-area: dest; justify-self: start; }
 }
 .selected__toggle {
   background: transparent;
@@ -619,7 +633,7 @@ html, body {
 }
 .line-row {
   display: grid;
-  grid-template-columns: auto auto 1fr;
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 6px 10px;
@@ -670,6 +684,28 @@ html, body {
   color: var(--text-dim);
   font-style: italic;
 }
+.line-row__dest-toggle {
+  justify-self: end;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.line-row__dest-toggle:hover:not([disabled]) { color: var(--text); border-color: var(--accent); }
+.line-row__dest-toggle--on {
+  background: rgba(245, 213, 71, 0.12);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.line-row__dest-toggle[disabled] { cursor: not-allowed; }
 
 /* Compact-row inline min-mins control */
 .mins-inline {
@@ -744,18 +780,29 @@ html, body {
 }
 .remove-btn:hover { color: var(--stale); border-color: var(--stale); }
 
-/* Options — compact inline cluster */
+/* Options — grouped rows with dividers */
 .options-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
+  margin: 0 0 4px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: #0c0c0c;
+  overflow: hidden;
 }
 .option--inline {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.option--inline:last-child { border-bottom: 0; }
+.option--inline > label,
+.option--inline > .switch {
+  flex: 1;
+  margin: 0;
 }
 .option--inline label {
   font-size: 12px;
@@ -764,19 +811,20 @@ html, body {
   letter-spacing: 0.08em;
 }
 .option--inline input[type="number"] {
-  background: #0c0c0c;
+  background: #000;
   color: var(--text);
   border: 1px solid var(--panel-border);
   border-radius: 6px;
   font: inherit;
   font-size: 15px;
   padding: 6px 10px;
-  width: 70px;
-  text-align: right;
+  width: 64px;
+  text-align: center;
 }
 .switch {
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -784,7 +832,7 @@ html, body {
   color: var(--text-dim);
   cursor: pointer;
 }
-.switch input { width: 16px; height: 16px; accent-color: var(--accent); }
+.switch input { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 
 .size-toggle {
   display: inline-flex;
@@ -842,6 +890,15 @@ html, body {
 }
 #copy-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+.open-cta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.open-cta .muted { margin: 0; font-size: 12px; }
 .open-btn {
   display: inline-block;
   background: var(--accent);
@@ -849,9 +906,10 @@ html, body {
   text-decoration: none;
   font-weight: 700;
   font-size: 16px;
-  padding: 12px 18px;
+  padding: 12px 24px;
   border-radius: 8px;
-  margin-top: 4px;
+  min-width: 220px;
+  text-align: center;
 }
 .open-btn:hover { filter: brightness(1.08); }
 .open-btn[hidden] { display: none; }

@@ -18,7 +18,23 @@ from django.views.decorators.http import require_GET
 from .cache import cache
 from .render import feed_age_seconds, render_card
 from .stations import registry
-from .subscriptions import parse as parse_subs
+from .subscriptions import LineSpec, Subscription, parse as parse_subs
+
+
+def _apply_legacy_hide_dest(subs: list[Subscription]) -> list[Subscription]:
+    """Force show_dest=False on every line of every sub.
+
+    Used for backward-compat with old URLs that carried ``d=0`` as a global
+    "hide destinations" toggle (now expressed per-line on each ``s=`` value).
+    """
+    out: list[Subscription] = []
+    for s in subs:
+        out.append(Subscription(
+            complex_id=s.complex_id,
+            line_specs=tuple(LineSpec(line=ls.line, direction=ls.direction, show_dest=False) for ls in s.line_specs),
+            min_mins=s.min_mins,
+        ))
+    return out
 
 
 def arrivals(request: HttpRequest):
@@ -87,9 +103,11 @@ def _read_n(request: HttpRequest, default: int) -> int:
     return max(1, min(n, 20))
 
 
-def _read_show_dest(request: HttpRequest) -> bool:
-    raw = request.GET.get("d", "1").strip().lower()
-    return raw not in ("0", "false", "no")
+def _read_legacy_hide_dest(request: HttpRequest) -> bool:
+    """Legacy ``d=0`` query param meant "hide destinations globally"; missing
+    or any other value means honor each line's own show_dest setting."""
+    raw = (request.GET.get("d") or "").strip().lower()
+    return raw in ("0", "false", "no")
 
 
 def _read_font_size(request: HttpRequest) -> str:
@@ -100,8 +118,8 @@ def _read_font_size(request: HttpRequest) -> str:
 def _sub_to_url_value(sub) -> str:
     """Canonical URL form for a Subscription's ``s=`` param.
 
-    - All complex lines + same direction → ``cx<id>[:<dir>]`` shorthand
-    - Otherwise → ``cx<id>:line1=dir1,line2=dir2,...``
+    - All complex lines + same direction + all show_dest=True → ``cx<id>[:<dir>]`` shorthand
+    - Otherwise → ``cx<id>:line1=dir1[-],line2=dir2[-],...``
     """
     cx = registry.get_complex(sub.complex_id)
     if cx is None or not sub.line_specs:
@@ -109,28 +127,27 @@ def _sub_to_url_value(sub) -> str:
 
     dirs = {ls.direction for ls in sub.line_specs}
     sub_lines = {ls.line for ls in sub.line_specs}
-    if sub_lines == set(cx.lines) and len(dirs) == 1:
+    all_show = all(ls.show_dest for ls in sub.line_specs)
+    if all_show and sub_lines == set(cx.lines) and len(dirs) == 1:
         only_dir = next(iter(dirs))
         return f"cx{sub.complex_id}" if only_dir == "*" else f"cx{sub.complex_id}:{only_dir}"
 
-    parts = [f"{ls.line}={ls.direction}" for ls in sub.line_specs]
+    parts = [f"{ls.line}={ls.direction}{'' if ls.show_dest else '-'}" for ls in sub.line_specs]
     return f"cx{sub.complex_id}:" + ",".join(parts)
 
 
 @require_GET
 def display(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
-    show_dest = _read_show_dest(request)
+    if _read_legacy_hide_dest(request):
+        subs = _apply_legacy_hide_dest(subs)
     font_size = _read_font_size(request)
-    # When destinations are hidden, default n bumps from 3 to 6 — rows are
-    # visually shorter so we can fit more before getting cluttered.
-    n = _read_n(request, default=6 if not show_dest else 3)
+    n = _read_n(request, default=3)
     now = int(time.time())
-    cards = [render_card(s, now=now, limit=n, show_dest=show_dest) for s in subs]
+    cards = [render_card(s, now=now, limit=n) for s in subs]
 
     common_params: list[tuple[str, str]] = [("s", _sub_to_url_value(s)) for s in subs]
     common_params.append(("n", str(n)))
-    common_params.append(("d", "1" if show_dest else "0"))
     common_params.append(("f", font_size))
     # Min-mins is per-complex; emit one m= per distinct (complex, mins) pair.
     seen_mins: set[str] = set()
@@ -146,7 +163,6 @@ def display(request: HttpRequest):
         "setup_url": f"/setup?{urlencode(common_params)}" if subs else "/setup",
         "feed_age": feed_age_seconds(now),
         "trains_per_card": n,
-        "show_destination": show_dest,
         "font_size": font_size,
     })
 
@@ -156,8 +172,9 @@ def display_stream(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
     if not subs:
         return HttpResponseBadRequest("missing 's' subscriptions")
-    show_dest = _read_show_dest(request)
-    n = _read_n(request, default=6 if not show_dest else 3)
+    if _read_legacy_hide_dest(request):
+        subs = _apply_legacy_hide_dest(subs)
+    n = _read_n(request, default=3)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
@@ -167,7 +184,7 @@ def display_stream(request: HttpRequest):
             now = int(time.time())
             payload_parts: list[str] = []
             for s in subs:
-                html = render_card(s, now=now, limit=n, show_dest=show_dest)
+                html = render_card(s, now=now, limit=n)
                 payload_parts.append(
                     f'<turbo-stream action="replace" target="{s.card_id}">'
                     f'<template>{html}</template></turbo-stream>'

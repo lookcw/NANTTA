@@ -13,8 +13,10 @@ URL formats accepted:
 
 - ``s=cx<complex_id>``                  — all lines, both directions (the default)
 - ``s=cx<complex_id>:<dir>``            — all lines, one direction (``N|S|*``)
-- ``s=cx<complex_id>:<spec>``           — per-line: comma-separated ``line[=dir]``
-                                          entries, e.g. ``1=N,2=*,3=S``
+- ``s=cx<complex_id>:<spec>``           — per-line: comma-separated ``line[=dir][-]``
+                                          entries, e.g. ``1=N,2=*,3=S-``.
+                                          Trailing ``-`` on an entry hides the
+                                          destination terminus for that line.
 - ``s=<stop_id>``                       — legacy: resolves to the stop's complex,
                                           lines = the stop's daytime routes,
                                           all direction "*"
@@ -37,6 +39,7 @@ from .stations import registry
 class LineSpec:
     line: str
     direction: str  # "N", "S", or "*"
+    show_dest: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,8 +66,8 @@ def parse(
     Multiple entries for the same complex are merged — line_specs union (with
     a per-line direction conflict resolving to "*"), min_mins taking the max.
     """
-    # complex_id -> {line -> dir}
-    pending: dict[str, dict[str, str]] = {}
+    # complex_id -> {line -> (dir, show_dest)}
+    pending: dict[str, dict[str, tuple[str, bool]]] = {}
     order: list[str] = []
 
     for raw in raw_subs:
@@ -75,13 +78,17 @@ def parse(
         if cx_id not in pending:
             pending[cx_id] = {}
             order.append(cx_id)
-        for line, direction in specs:
+        for line, direction, show_dest in specs:
             existing = pending[cx_id].get(line)
             if existing is None:
-                pending[cx_id][line] = direction
-            elif existing != direction:
-                # Conflict (e.g. line specified twice with different dirs) → "*"
-                pending[cx_id][line] = "*"
+                pending[cx_id][line] = (direction, show_dest)
+            else:
+                prev_dir, prev_show = existing
+                # Direction conflict resolves to "*"; show_dest conflict resolves
+                # to True (show), favoring the more-informative display.
+                merged_dir = prev_dir if prev_dir == direction else "*"
+                merged_show = prev_show or show_dest
+                pending[cx_id][line] = (merged_dir, merged_show)
 
     mins_by_complex: dict[str, int] = {}
     for raw in raw_mins:
@@ -106,8 +113,8 @@ def parse(
     out: list[Subscription] = []
     for cx_id in order:
         line_specs = tuple(
-            LineSpec(line=line, direction=direction)
-            for line, direction in pending[cx_id].items()
+            LineSpec(line=line, direction=direction, show_dest=show_dest)
+            for line, (direction, show_dest) in pending[cx_id].items()
         )
         out.append(Subscription(
             complex_id=cx_id,
@@ -117,8 +124,8 @@ def parse(
     return out
 
 
-def _parse_one_sub(raw: str) -> tuple[str, list[tuple[str, str]]] | None:
-    """Return ``(complex_id, [(line, dir), ...])`` for one ``s=`` value, or None."""
+def _parse_one_sub(raw: str) -> tuple[str, list[tuple[str, str, bool]]] | None:
+    """Return ``(complex_id, [(line, dir, show_dest), ...])`` for one ``s=`` value, or None."""
     raw = raw.strip()
     if not raw:
         return None
@@ -157,20 +164,25 @@ def _parse_one_sub(raw: str) -> tuple[str, list[tuple[str, str]]] | None:
     # Default: all complex lines (or inherited stop lines), direction "*"
     if not spec_str:
         lines = inherit_lines or complex_obj.lines
-        return cx_id, [(line, "*") for line in lines]
+        return cx_id, [(line, "*", True) for line in lines]
 
     # Direction-only form: "N", "S", "*" — applies to all complex/inherited lines.
     if spec_str in ("N", "S", "*"):
         lines = inherit_lines or complex_obj.lines
-        return cx_id, [(line, spec_str) for line in lines]
+        return cx_id, [(line, spec_str, True) for line in lines]
 
-    # Per-line form: comma-separated "line[=dir]"
+    # Per-line form: comma-separated "line[=dir][-]".  Trailing "-" hides the
+    # destination terminus for that line.
     valid_lines = set(complex_obj.lines)
-    specs: list[tuple[str, str]] = []
+    specs: list[tuple[str, str, bool]] = []
     for entry in spec_str.split(","):
         entry = entry.strip()
         if not entry:
             continue
+        show_dest = True
+        if entry.endswith("-"):
+            show_dest = False
+            entry = entry[:-1]
         if "=" in entry:
             line, _, dir_raw = entry.partition("=")
             line = line.strip()
@@ -182,11 +194,11 @@ def _parse_one_sub(raw: str) -> tuple[str, list[tuple[str, str]]] | None:
             continue
         if direction not in ("N", "S", "*"):
             continue
-        specs.append((line, direction))
+        specs.append((line, direction, show_dest))
 
     if not specs:
         # Malformed spec → fall back to all lines, both directions.
         lines = inherit_lines or complex_obj.lines
-        return cx_id, [(line, "*") for line in lines]
+        return cx_id, [(line, "*", True) for line in lines]
 
     return cx_id, specs

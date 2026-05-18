@@ -17,12 +17,11 @@
       {% if subs %}
       try {
         var subsFromServer = [
-          {% for s in subs %}{ cx: "{{ s.complex_id|escapejs }}", mins: {{ s.min_mins }}, lines: [{% for ls in s.line_specs %}{ line: "{{ ls.line|escapejs }}", dir: "{{ ls.direction|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}] }{% if not forloop.last %},{% endif %}{% endfor %}
+          {% for s in subs %}{ cx: "{{ s.complex_id|escapejs }}", mins: {{ s.min_mins }}, lines: [{% for ls in s.line_specs %}{ line: "{{ ls.line|escapejs }}", dir: "{{ ls.direction|escapejs }}", showDest: {% if ls.show_dest %}true{% else %}false{% endif %} }{% if not forloop.last %},{% endif %}{% endfor %}] }{% if not forloop.last %},{% endif %}{% endfor %}
         ];
         localStorage.setItem(KEY, JSON.stringify({
           subs: subsFromServer,
           n: {{ trains_per_card }},
-          showDest: {% if show_destination %}true{% else %}false{% endif %},
           fontSize: "{{ font_size|escapejs }}"
         }));
         // Clean the address bar — the server has already rendered the page
@@ -39,6 +38,8 @@
         if (!raw) return;
         var cfg = JSON.parse(raw);
         if (!cfg || !Array.isArray(cfg.subs) || !cfg.subs.length) return;
+        // Legacy global showDest: false → apply per-line "hide dest" suffix.
+        var legacyHideAll = cfg.showDest === false;
         var params = new URLSearchParams();
         cfg.subs.forEach(function (s) {
           if (!s) return;
@@ -46,19 +47,21 @@
           if (!cx) return;
           var prefix = s.cx ? "cx" : "";
           var v;
-          // New per-line shape: { cx, lines: [{line, dir}], mins }
+          // New per-line shape: { cx, lines: [{line, dir, showDest}], mins }
           if (Array.isArray(s.lines) && s.lines.length && typeof s.lines[0] === "object") {
             v = prefix + cx + ":" + s.lines
               .filter(function (l) { return l && l.line; })
               .map(function (l) {
                 var dir = ["N", "S", "*"].indexOf(l.dir) !== -1 ? l.dir : "*";
-                return l.line + "=" + dir;
+                var hide = legacyHideAll || l.showDest === false;
+                return l.line + "=" + dir + (hide ? "-" : "");
               }).join(",");
           } else {
             // Older shape: { cx|id, dir, lines: [string] }
             var dir = ["N", "S", "*"].indexOf(s.dir) !== -1 ? s.dir : "*";
             v = prefix + cx + ":" + dir;
             if (Array.isArray(s.lines) && s.lines.length) v += ":" + s.lines.join(",");
+            if (legacyHideAll) params.append("d", "0");
           }
           params.append("s", v);
           if (Number.isFinite(s.mins) && s.mins > 0) {
@@ -66,7 +69,6 @@
           }
         });
         if (Number.isFinite(cfg.n)) params.set("n", String(cfg.n));
-        if (typeof cfg.showDest === "boolean") params.set("d", cfg.showDest ? "1" : "0");
         if (["s", "m", "l"].indexOf(cfg.fontSize) !== -1) params.set("f", cfg.fontSize);
         if (!params.getAll("s").length) return;
         window.location.replace("/display?" + params.toString());

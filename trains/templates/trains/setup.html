@@ -41,14 +41,8 @@
 
       <div class="options-grid">
         <div class="option option--inline">
-          <label for="opt-n">Trains per card</label>
+          <label for="opt-n">Trains per station</label>
           <input id="opt-n" type="number" min="1" max="20" step="1" value="3">
-        </div>
-        <div class="option option--inline">
-          <label class="switch">
-            <input id="opt-d" type="checkbox" checked>
-            <span>Show destination</span>
-          </label>
         </div>
         <div class="option option--inline">
           <label>Text size</label>
@@ -59,15 +53,19 @@
           </div>
         </div>
       </div>
+      <p class="muted options-note">Pick destinations on each line, in the Selected list.</p>
 
-      <h2 class="panel__subheader">Result</h2>
+      <h2 class="panel__subheader">Shareable link</h2>
       <div class="url-preview">
         <code id="url-out"></code>
-        <button id="copy-btn" type="button">Copy</button>
+        <button id="copy-btn" type="button">Copy link</button>
       </div>
-      <a id="open-btn" class="open-btn" href="#">Open display →</a>
-      <p id="open-disabled" class="muted">Add at least one station to open the display.</p>
     </section>
+
+    <div class="open-cta">
+      <a id="open-btn" class="open-btn" href="#">Show train times →</a>
+      <p id="open-disabled" class="muted">Add at least one station to open the display.</p>
+    </div>
   </main>
 
   <footer class="page-footer">

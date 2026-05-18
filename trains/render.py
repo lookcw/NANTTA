@@ -45,6 +45,7 @@ class TrainRow:
     arrival_epoch: int
     seconds_until: int
     display: str  # "now" or "3 min" — JS may overwrite on per-second tick
+    show_dest: bool = True  # per-line setting carried from the LineSpec
 
 
 def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
@@ -62,6 +63,7 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
         return []
 
     line_dir: dict[str, str] = {ls.line: ls.direction for ls in sub.line_specs}
+    line_show_dest: dict[str, bool] = {ls.line: ls.show_dest for ls in sub.line_specs}
 
     merged: list[Arrival] = []
     for sid in cx.stop_ids:
@@ -83,13 +85,13 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
         if a.trip_id in seen_trips:
             continue
         seen_trips.add(a.trip_id)
-        rows.append(_to_row(a, now))
+        rows.append(_to_row(a, now, show_dest=line_show_dest.get(base_line, True)))
         if len(rows) >= limit:
             break
     return rows
 
 
-def _to_row(a: Arrival, now: int) -> TrainRow:
+def _to_row(a: Arrival, now: int, show_dest: bool = True) -> TrainRow:
     secs = max(0, a.arrival_epoch - now)
     is_express = bool(a.route_id) and a.route_id.endswith("X") and len(a.route_id) > 1
     display_route = a.route_id[:-1] if is_express else a.route_id
@@ -106,6 +108,7 @@ def _to_row(a: Arrival, now: int) -> TrainRow:
         arrival_epoch=a.arrival_epoch,
         seconds_until=secs,
         display=format_eta(secs),
+        show_dest=show_dest,
     )
 
 
@@ -122,12 +125,15 @@ def render_card(
     sub: Subscription,
     now: int | None = None,
     limit: int = 3,
-    show_dest: bool = True,
 ) -> str:
     if now is None:
         now = int(time.time())
     cx = registry.get_complex(sub.complex_id)
     rows = upcoming(sub, now=now, limit=limit)
+    # If every row on the card hides its destination, fall back to the
+    # compact chip layout for density. Mixed cards use the per-row "trains"
+    # layout with each row's destination shown or hidden individually.
+    any_show_dest = any(r.show_dest for r in rows) if rows else True
     ctx = {
         "sub": sub,
         "complex": cx,
@@ -136,7 +142,7 @@ def render_card(
         "direction_label": None,
         "rows": rows,
         "now": now,
-        "show_dest": show_dest,
+        "any_show_dest": any_show_dest,
     }
     return render_to_string("trains/_station_card.html", ctx)
 
