@@ -64,27 +64,50 @@ html, body {
   overflow-x: hidden;
 }
 
-.display__header {
+/* Footer bar on /display: replaces the old top header so cards get the full
+   viewport height. Brand + acronym on the left, clock + gear on the right. */
+.display-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 28px 10px;
-  border-bottom: 1px solid var(--panel-border);
-}
-.display__header h1 {
-  margin: 0;
-  font-size: 20px;
-  letter-spacing: 0.18em;
+  gap: 14px;
+  padding: 8px 18px;
+  background: linear-gradient(to top, rgba(10,10,10,0.96), rgba(10,10,10,0.7));
+  border-top: 1px solid var(--panel-border);
+  font-size: 12px;
   color: var(--text-dim);
-  font-weight: 600;
+  z-index: 5;
 }
-.display__meta {
-  display: flex;
-  gap: 16px;
+.display-footer__brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.display-footer__name {
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.display-footer__expand {
+  color: var(--text-dimmer);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+.display-footer__meta {
+  display: inline-flex;
   align-items: center;
+  gap: 12px;
   font-variant-numeric: tabular-nums;
-  font-size: 16px;
-  color: var(--text-dim);
+}
+.display-footer__clock {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 .stale {
   background: var(--stale);
@@ -102,8 +125,8 @@ html, body {
   justify-content: center;
   color: var(--text-dim);
   text-decoration: none;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   border: 1px solid transparent;
 }
@@ -130,7 +153,8 @@ html, body {
      overflowing horizontally. */
   grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
   gap: 14px;
-  padding: 14px 20px 24px;
+  /* leave room for the fixed display-footer at the bottom */
+  padding: 14px 20px 58px;
 }
 
 .card {
