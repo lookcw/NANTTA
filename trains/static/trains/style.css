@@ -611,13 +611,16 @@ html, body {
   justify-self: end;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 .line-row__dir-label {
-  font-size: 12px;
+  background: var(--accent);
+  color: #000;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
 }
 .line-row__terminus {
   font-size: 10px;
