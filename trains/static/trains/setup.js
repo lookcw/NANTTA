@@ -566,8 +566,11 @@
       disabled.hidden = true;
       open.setAttribute("href", path);
     }
-    const setupParams = new URLSearchParams(path.split("?")[1]);
-    history.replaceState(null, "", "/setup?" + setupParams.toString());
+    // Keep the address bar clean — the full URL lives in #url-out (with
+    // the Copy button) for sharing. localStorage handles refresh.
+    if (window.location.pathname !== "/setup" || window.location.search) {
+      history.replaceState(null, "", "/setup");
+    }
   }
 
   document.getElementById("copy-btn").addEventListener("click", async () => {

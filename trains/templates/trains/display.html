@@ -25,6 +25,13 @@
           showDest: {% if show_destination %}true{% else %}false{% endif %},
           fontSize: "{{ font_size|escapejs }}"
         }));
+        // Clean the address bar — the server has already rendered the page
+        // with these params and the Turbo Stream source URL is independent.
+        // Sharable links still work because the params took effect before
+        // we wiped them from the visible URL.
+        if (window.location.search) {
+          history.replaceState(null, "", "/display");
+        }
       } catch (_) { /* ignore */ }
       {% else %}
       try {
