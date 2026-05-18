@@ -92,10 +92,16 @@ def _read_show_dest(request: HttpRequest) -> bool:
     return raw not in ("0", "false", "no")
 
 
+def _read_font_size(request: HttpRequest) -> str:
+    raw = (request.GET.get("f") or "m").strip().lower()
+    return raw if raw in ("s", "m", "l") else "m"
+
+
 @require_GET
 def display(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
     show_dest = _read_show_dest(request)
+    font_size = _read_font_size(request)
     # When destinations are hidden, default n bumps from 3 to 6 — rows are
     # visually shorter so we can fit more before getting cluttered.
     n = _read_n(request, default=6 if not show_dest else 3)
@@ -105,10 +111,11 @@ def display(request: HttpRequest):
     stream_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
     stream_params.append(("n", str(n)))
     stream_params.append(("d", "1" if show_dest else "0"))
+    stream_params.append(("f", font_size))
     stream_qs = urlencode(stream_params)
     setup_qs = urlencode(
         [("s", f"{s.stop_id}:{s.direction}") for s in subs]
-        + [("n", str(n)), ("d", "1" if show_dest else "0")]
+        + [("n", str(n)), ("d", "1" if show_dest else "0"), ("f", font_size)]
     )
     return render(request, "trains/display.html", {
         "subs": subs,
@@ -118,6 +125,7 @@ def display(request: HttpRequest):
         "feed_age": feed_age_seconds(now),
         "trains_per_card": n,
         "show_destination": show_dest,
+        "font_size": font_size,
     })
 
 

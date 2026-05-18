@@ -7,6 +7,48 @@
   --text-dimmer: #5a5a5a;
   --accent: #ffd400;
   --stale: #c93030;
+
+  /* Display size — overridden by .display--size-{s,m,l} classes. Defaults
+     here are the "medium" tier. */
+  --bullet-size: 48px;
+  --bullet-fs: 26px;
+  --bullet-sm-size: 32px;
+  --bullet-sm-fs: 18px;
+  --eta-fs: 38px;
+  --chip-eta-fs: 22px;
+  --name-fs: 18px;
+  --sub-fs: 10px;
+  --dest-fs: 13px;
+  --dir-fs: 11px;
+  --bullet-col: 52px;
+}
+
+.display--size-s {
+  --bullet-size: 36px;
+  --bullet-fs: 20px;
+  --bullet-sm-size: 26px;
+  --bullet-sm-fs: 15px;
+  --eta-fs: 28px;
+  --chip-eta-fs: 17px;
+  --name-fs: 15px;
+  --sub-fs: 9px;
+  --dest-fs: 11px;
+  --dir-fs: 9px;
+  --bullet-col: 40px;
+}
+
+.display--size-l {
+  --bullet-size: 64px;
+  --bullet-fs: 34px;
+  --bullet-sm-size: 42px;
+  --bullet-sm-fs: 24px;
+  --eta-fs: 52px;
+  --chip-eta-fs: 30px;
+  --name-fs: 24px;
+  --sub-fs: 12px;
+  --dest-fs: 16px;
+  --dir-fs: 13px;
+  --bullet-col: 70px;
 }
 
 * { box-sizing: border-box; }
@@ -111,7 +153,7 @@ html, body {
 }
 .card__name {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--name-fs);
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -122,7 +164,7 @@ html, body {
   gap: 10px;
   margin-top: 2px;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: var(--sub-fs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
@@ -148,14 +190,14 @@ html, body {
    Bullet and ETA dominate; destination is a caption. */
 .train {
   display: grid;
-  grid-template-columns: 52px minmax(5.5ch, max-content) max-content 1fr;
+  grid-template-columns: var(--bullet-col) minmax(5.5ch, max-content) max-content 1fr;
   align-items: baseline;
   gap: 14px;
   padding: 4px 0;
 }
 .train__dir {
   display: inline-block;
-  font-size: 11px;
+  font-size: var(--dir-fs);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-dim);
@@ -189,13 +231,13 @@ html, body {
   min-width: 0;          /* allow chips to shrink instead of overflowing */
 }
 .chip__eta {
-  font-size: 22px;
+  font-size: var(--chip-eta-fs);
   font-weight: 800;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 .chip__dir {
-  font-size: 10px;
+  font-size: var(--dir-fs);
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-dim);
@@ -221,11 +263,11 @@ html, body {
   align-items: center;
   justify-content: center;
   align-self: center;
-  width: 48px;
-  height: 48px;
+  width: var(--bullet-size);
+  height: var(--bullet-size);
   border-radius: 50%;
   font-weight: 800;
-  font-size: 26px;
+  font-size: var(--bullet-fs);
   font-family: "Helvetica Neue", Helvetica, sans-serif;
   letter-spacing: -0.02em;
   flex-shrink: 0;
@@ -239,12 +281,12 @@ html, body {
   transform: rotate(-45deg);
 }
 .bullet--sm {
-  width: 32px;
-  height: 32px;
-  font-size: 18px;
+  width: var(--bullet-sm-size);
+  height: var(--bullet-sm-size);
+  font-size: var(--bullet-sm-fs);
 }
 .train__eta {
-  font-size: 38px;
+  font-size: var(--eta-fs);
   font-weight: 800;
   color: var(--accent);
   line-height: 1;
@@ -252,7 +294,7 @@ html, body {
 }
 .train__dest {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--dest-fs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 500;
@@ -269,8 +311,8 @@ html, body {
   .train__dest { font-size: 14px; }
 }
 
-/* Phone-sized viewports — tighten everything so a single card fits without
-   horizontal scroll and chips wrap to multiple lines. */
+/* Phone-sized viewports — only layout/padding tweaks here. Type sizes are
+   driven by the .display--size-{s,m,l} classes so user choice wins. */
 @media (max-width: 480px) {
   .display__header {
     padding: 10px 14px 8px;
@@ -280,15 +322,7 @@ html, body {
   .grid { padding: 10px 12px 20px; gap: 10px; }
   .card { padding: 12px 14px; }
   .card--compact { padding: 10px 12px; }
-  .card__name { font-size: 17px; }
-  .card__sub { font-size: 10px; gap: 8px; }
-  .train { grid-template-columns: 44px minmax(5ch, max-content) max-content 1fr; gap: 10px; }
-  .train__eta { font-size: 30px; }
-  .train__dest { font-size: 12px; }
-  .train__dir { font-size: 10px; padding: 1px 5px; }
-  .bullet { width: 40px; height: 40px; font-size: 22px; }
-  .bullet--sm { width: 28px; height: 28px; font-size: 16px; }
-  .chip__eta { font-size: 18px; }
+  .train { gap: 10px; }
   .chip { padding: 3px 10px 3px 3px; gap: 6px; }
   .gear { width: 28px; height: 28px; }
   .gear svg { width: 18px; height: 18px; }
@@ -506,6 +540,30 @@ html, body {
 .option__hint { color: var(--text-dimmer); font-size: 12px; margin: 4px 0 0; }
 .switch { display: inline-flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 15px; color: var(--text); }
 .switch input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+.size-toggle {
+  display: inline-flex;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.size-toggle button {
+  background: transparent;
+  color: var(--text-dim);
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  border-right: 1px solid var(--panel-border);
+}
+.size-toggle button:last-child { border-right: 0; }
+.size-toggle button:hover { color: var(--text); }
+.size-toggle button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #000;
+}
 
 /* URL preview + open */
 .url-preview {

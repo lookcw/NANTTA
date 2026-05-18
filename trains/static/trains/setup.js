@@ -6,6 +6,7 @@
     subs: [],         // [{id, dir}] where dir is "N" | "S" | "*"
     n: 3,
     showDest: true,
+    fontSize: "m",    // "s" | "m" | "l"
   };
 
   // ---------- DOM helpers ----------
@@ -55,7 +56,11 @@
   const STORAGE_KEY = "nantta.config";
 
   function loadFromUrl(params) {
-    let loaded = false;
+    // Only treat the URL as authoritative when it carries at least one ``s``
+    // subscription. n / d / f alone aren't enough — without subs, fall back
+    // to localStorage so a visit to /setup?n=3&d=1 still restores the user's
+    // saved stations.
+    let hasSubs = false;
     params.getAll("s").forEach((raw) => {
       const [id, dRaw] = raw.split(":");
       const d = (dRaw || "*").toUpperCase();
@@ -63,16 +68,16 @@
       if (!["N", "S", "*"].includes(d)) return;
       if (state.subs.some((x) => x.id === id && x.dir === d)) return;
       state.subs.push({ id, dir: d });
-      loaded = true;
+      hasSubs = true;
     });
+    if (!hasSubs) return false;
     const n = parseInt(params.get("n"), 10);
-    if (Number.isFinite(n)) { state.n = Math.max(1, Math.min(n, 20)); loaded = true; }
+    if (Number.isFinite(n)) state.n = Math.max(1, Math.min(n, 20));
     const dParam = params.get("d");
-    if (dParam != null) {
-      state.showDest = !(dParam === "0" || dParam === "false" || dParam === "no");
-      loaded = true;
-    }
-    return loaded;
+    if (dParam != null) state.showDest = !(dParam === "0" || dParam === "false" || dParam === "no");
+    const fParam = params.get("f");
+    if (["s", "m", "l"].includes(fParam)) state.fontSize = fParam;
+    return true;
   }
 
   function loadFromStorage() {
@@ -90,6 +95,7 @@
       }
       if (Number.isFinite(cfg.n)) state.n = Math.max(1, Math.min(cfg.n, 20));
       if (typeof cfg.showDest === "boolean") state.showDest = cfg.showDest;
+      if (["s", "m", "l"].includes(cfg.fontSize)) state.fontSize = cfg.fontSize;
       return true;
     } catch (_) {
       return false;
@@ -102,13 +108,14 @@
         subs: state.subs,
         n: state.n,
         showDest: state.showDest,
+        fontSize: state.fontSize,
       }));
     } catch (_) { /* quota / private mode — ignore */ }
   }
 
   function initFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    // URL wins when present; otherwise fall back to localStorage.
+    // URL wins when it carries subs; otherwise fall through to storage.
     const fromUrl = loadFromUrl(params);
     if (!fromUrl) loadFromStorage();
   }
@@ -278,7 +285,20 @@
     // overwrite the user's in-progress keystrokes.
     if (document.activeElement !== nInput) nInput.value = String(state.n);
     dInput.checked = state.showDest;
+    document.querySelectorAll('#size-toggle button[data-size]').forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.size === state.fontSize ? "true" : "false");
+    });
   }
+
+  // Font-size toggle (S/M/L)
+  document.querySelectorAll('#size-toggle button[data-size]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const v = btn.dataset.size;
+      if (!["s", "m", "l"].includes(v)) return;
+      state.fontSize = v;
+      syncAll();
+    });
+  });
 
   // ---------- URL preview + open ----------
   function buildPath() {
@@ -286,6 +306,7 @@
     state.subs.forEach((s) => params.append("s", `${s.id}:${s.dir}`));
     params.set("n", String(state.n));
     params.set("d", state.showDest ? "1" : "0");
+    params.set("f", state.fontSize);
     return `/display?${params.toString()}`;
   }
   function renderUrl() {

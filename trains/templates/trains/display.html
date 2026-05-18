@@ -22,7 +22,8 @@
         localStorage.setItem(KEY, JSON.stringify({
           subs: subsFromServer,
           n: {{ trains_per_card }},
-          showDest: {% if show_destination %}true{% else %}false{% endif %}
+          showDest: {% if show_destination %}true{% else %}false{% endif %},
+          fontSize: "{{ font_size|escapejs }}"
         }));
       } catch (_) { /* ignore */ }
       {% else %}
@@ -39,6 +40,7 @@
         });
         if (Number.isFinite(cfg.n)) params.set("n", String(cfg.n));
         if (typeof cfg.showDest === "boolean") params.set("d", cfg.showDest ? "1" : "0");
+        if (["s", "m", "l"].indexOf(cfg.fontSize) !== -1) params.set("f", cfg.fontSize);
         if (!params.getAll("s").length) return;
         window.location.replace("/display?" + params.toString());
       } catch (_) { /* ignore */ }
@@ -48,7 +50,7 @@
   <script type="module" src="https://unpkg.com/@hotwired/turbo@8.0.5/dist/turbo.es2017-esm.js"></script>
   <script src="{% static 'trains/countdown.js' %}" defer></script>
 </head>
-<body class="display" data-feed-age="{{ feed_age|default:'' }}">
+<body class="display display--size-{{ font_size|default:'m' }}" data-feed-age="{{ feed_age|default:'' }}">
   <header class="display__header">
     <h1>NANTTA</h1>
     <div class="display__meta">
