@@ -1,15 +1,26 @@
 (function () {
-  // Each row in COMPLEXES is one MTA station complex (445 of them). Search
-  // dedupes by complex — typing "atlantic av" returns exactly one row,
-  // "court sq" returns one row, etc.
+  // One row per MTA station complex (445 of them). Each carries a per-line
+  // direction-label map so each line in the complex can render its own
+  // borough-coded direction toggle (e.g. at Atlantic Av: R train shows
+  // MAN/BK, the 2/3/4/5 also show MAN/BK, but the labels can disagree at
+  // mixed-direction complexes like Court Sq).
   const COMPLEXES = JSON.parse(document.getElementById("stations-data").textContent);
   const COMPLEXES_BY_ID = Object.fromEntries(COMPLEXES.map((c) => [c.id, c]));
-  // Lookup table: which complex does a given stop_id belong to?
+  // Lookup tables
   const STOP_TO_COMPLEX = {};
   COMPLEXES.forEach((c) => (c.stop_ids || []).forEach((sid) => { STOP_TO_COMPLEX[sid] = c.id; }));
+  // Per-complex per-line info: { complex_id: { line: {n_short, s_short, n_label, s_label} } }
+  const LINE_INFO = {};
+  COMPLEXES.forEach((c) => {
+    LINE_INFO[c.id] = {};
+    (c.line_info || []).forEach((li) => { LINE_INFO[c.id][li.line] = li; });
+  });
 
-  // Subscription shape: { cx: complex_id, dir: "N"|"S"|"*", lines: [..], mins: int }
-  // Empty lines array = "all lines at this complex".
+  // Subscription shape:
+  //   { cx: complex_id,
+  //     mins: 0,
+  //     lines: [ { line, dir }, ... ]   // only included lines; unchecked = removed }
+  // Empty lines array = no lines = nothing to show.
   const state = {
     subs: [],
     expanded: {},     // { complex_id: true } — UI-only, not persisted
@@ -18,15 +29,11 @@
     fontSize: "m",
   };
 
-  function findSubIndex(cx, dir) {
-    return state.subs.findIndex((s) => s.cx === cx && s.dir === dir);
+  function findSubIndex(cx) {
+    return state.subs.findIndex((s) => s.cx === cx);
   }
-  function setSubMins(cx, mins) {
-    state.subs.forEach((s) => { if (s.cx === cx) s.mins = mins; });
-  }
-  function setSubDir(idx, dir) {
-    if (!["N", "S", "*"].includes(dir)) return;
-    state.subs[idx].dir = dir;
+  function defaultLineSpecs(complex) {
+    return complex.lines.map((line) => ({ line, dir: "*" }));
   }
 
   // ---------- DOM helpers ----------
@@ -75,37 +82,68 @@
   // ---------- Init from URL or localStorage ----------
   const STORAGE_KEY = "nantta.config";
 
+  function _parseLineSpecPart(spec, complex) {
+    // spec is the post-colon part: "N" | "1=N,2=S" | "" | "1,2,3" etc.
+    if (!spec) return defaultLineSpecs(complex);
+    if (["N", "S", "*"].includes(spec)) {
+      return complex.lines.map((line) => ({ line, dir: spec }));
+    }
+    const validLines = new Set(complex.lines);
+    const out = [];
+    spec.split(",").forEach((entry) => {
+      entry = entry.trim();
+      if (!entry) return;
+      let line, dir;
+      if (entry.includes("=")) {
+        [line, dir] = entry.split("=");
+        line = (line || "").trim();
+        dir = (dir || "*").trim().toUpperCase();
+      } else {
+        line = entry;
+        dir = "*";
+      }
+      if (!validLines.has(line)) return;
+      if (!["N", "S", "*"].includes(dir)) return;
+      out.push({ line, dir });
+    });
+    return out.length ? out : defaultLineSpecs(complex);
+  }
+
   function _resolveSubFromRaw(raw) {
-    // Accept "cx<id>[:dir[:lines]]" OR legacy "<stop_id>[:dir]".
-    const parts = raw.split(":");
-    let head = parts[0];
-    const dir = ((parts[1] || "*").toUpperCase()) || "*";
-    if (!["N", "S", "*"].includes(dir)) return null;
-    const linesRaw = parts[2] || "";
-    const lines = linesRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    // Accept "cx<id>[:<spec>]" OR legacy "<stop_id>[:<dir>]"
+    const colonIdx = raw.indexOf(":");
+    const head = colonIdx === -1 ? raw : raw.slice(0, colonIdx);
+    const spec = colonIdx === -1 ? "" : raw.slice(colonIdx + 1);
 
     let cxId = null;
-    let inheritLines = lines;
+    let inheritLines = null;
     if (head.startsWith("cx")) {
       const candidate = head.slice(2);
       if (COMPLEXES_BY_ID[candidate]) cxId = candidate;
     } else {
-      // Prefer stop_id; fall back to complex_id (legacy URLs typically
-      // referenced a platform). Numeric overlap is real, so we mirror the
-      // server-side preference.
       if (STOP_TO_COMPLEX[head]) {
         cxId = STOP_TO_COMPLEX[head];
-        if (!inheritLines.length) {
-          // Legacy: subscribed to a single platform → only its lines.
-          // We don't know the stop's lines here, but the complex carries
-          // the union — leave empty (= all) and let user narrow in UI.
+        // Inherit just this platform's lines for the legacy case
+        const complex = COMPLEXES_BY_ID[cxId];
+        if (complex) {
+          // We don't know the stop's lines client-side without extra data;
+          // fall back to ALL complex lines (closest sensible default).
+          inheritLines = complex.lines;
         }
       } else if (COMPLEXES_BY_ID[head]) {
         cxId = head;
       }
     }
     if (!cxId) return null;
-    return { cx: cxId, dir, lines: inheritLines, mins: 0 };
+    const complex = COMPLEXES_BY_ID[cxId];
+
+    let lines;
+    if (spec === "" && inheritLines) {
+      lines = inheritLines.map((l) => ({ line: l, dir: "*" }));
+    } else {
+      lines = _parseLineSpecPart(spec, complex);
+    }
+    return { cx: cxId, mins: 0, lines };
   }
 
   function loadFromUrl(params) {
@@ -113,20 +151,19 @@
     params.getAll("s").forEach((raw) => {
       const parsed = _resolveSubFromRaw(raw.trim());
       if (!parsed) return;
-      if (findSubIndex(parsed.cx, parsed.dir) !== -1) return;
+      if (findSubIndex(parsed.cx) !== -1) return;
       state.subs.push(parsed);
       hasSubs = true;
     });
     if (!hasSubs) return false;
-    // Per-complex min-mins.
     params.getAll("m").forEach((raw) => {
       const [head, minsRaw] = raw.trim().split(":");
       if (!head || !minsRaw) return;
       const mins = parseInt(minsRaw, 10);
       if (!Number.isFinite(mins) || mins <= 0) return;
       const cid = head.startsWith("cx") ? head.slice(2) : head;
-      if (!COMPLEXES_BY_ID[cid]) return;
-      setSubMins(cid, Math.min(mins, 120));
+      const sub = state.subs.find((s) => s.cx === cid);
+      if (sub) sub.mins = Math.min(mins, 120);
     });
     const n = parseInt(params.get("n"), 10);
     if (Number.isFinite(n)) state.n = Math.max(1, Math.min(n, 20));
@@ -145,34 +182,44 @@
       if (Array.isArray(cfg.subs)) {
         cfg.subs.forEach((entry) => {
           if (!entry) return;
-          // New shape: { cx, dir, lines, mins }
-          if (entry.cx) {
-            if (!COMPLEXES_BY_ID[entry.cx]) return;
-            const dir = ["N", "S", "*"].includes(entry.dir) ? entry.dir : "*";
-            if (findSubIndex(entry.cx, dir) !== -1) return;
-            const lines = Array.isArray(entry.lines) ? entry.lines.filter((l) => typeof l === "string") : [];
+          // New per-line shape: { cx, mins, lines: [{line, dir}, ...] }
+          if (entry.cx && Array.isArray(entry.lines)) {
+            const complex = COMPLEXES_BY_ID[entry.cx];
+            if (!complex) return;
+            if (findSubIndex(entry.cx) !== -1) return;
+            const validLines = new Set(complex.lines);
+            const lines = entry.lines
+              .filter((l) => l && validLines.has(l.line) && ["N", "S", "*"].includes(l.dir))
+              .map((l) => ({ line: l.line, dir: l.dir }));
             const mins = Number.isFinite(entry.mins) ? Math.max(0, Math.min(entry.mins, 120)) : 0;
-            state.subs.push({ cx: entry.cx, dir, lines, mins });
+            state.subs.push({ cx: entry.cx, lines, mins });
             return;
           }
-          // Legacy shape: { id (stop_id), dir }. Convert to complex.
+          // Previous per-complex shape: { cx, dir, lines: [str], mins }
+          if (entry.cx && (typeof entry.dir === "string" || Array.isArray(entry.lines))) {
+            const complex = COMPLEXES_BY_ID[entry.cx];
+            if (!complex) return;
+            if (findSubIndex(entry.cx) !== -1) return;
+            const dir = ["N", "S", "*"].includes(entry.dir) ? entry.dir : "*";
+            const sourceLines = Array.isArray(entry.lines) && entry.lines.length ? entry.lines : complex.lines;
+            const lines = sourceLines
+              .filter((l) => complex.lines.includes(l))
+              .map((l) => ({ line: l, dir }));
+            const mins = Number.isFinite(entry.mins) ? Math.max(0, Math.min(entry.mins, 120)) : 0;
+            state.subs.push({ cx: entry.cx, lines, mins });
+            return;
+          }
+          // Earliest legacy shape: { id (stop_id), dir }
           if (entry.id && STOP_TO_COMPLEX[entry.id]) {
             const cx = STOP_TO_COMPLEX[entry.id];
+            const complex = COMPLEXES_BY_ID[cx];
+            if (!complex || findSubIndex(cx) !== -1) return;
             const dir = ["N", "S", "*"].includes(entry.dir) ? entry.dir : "*";
-            if (findSubIndex(cx, dir) !== -1) return;
-            state.subs.push({ cx, dir, lines: [], mins: 0 });
+            state.subs.push({
+              cx, mins: 0,
+              lines: complex.lines.map((line) => ({ line, dir })),
+            });
           }
-        });
-      }
-      // Legacy per-(stop, line) filters: collapse to per-complex max.
-      if (Array.isArray(cfg.filters)) {
-        cfg.filters.forEach((f) => {
-          if (!f || !f.stop || !Number.isFinite(f.mins) || f.mins <= 0) return;
-          const cx = STOP_TO_COMPLEX[f.stop];
-          if (!cx) return;
-          state.subs.forEach((s) => {
-            if (s.cx === cx) s.mins = Math.max(s.mins || 0, f.mins);
-          });
         });
       }
       if (Number.isFinite(cfg.n)) state.n = Math.max(1, Math.min(cfg.n, 20));
@@ -205,9 +252,7 @@
   const searchEl = document.getElementById("search");
   const resultsEl = document.getElementById("search-results");
 
-  function tokenize(q) {
-    return q.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  }
+  function tokenize(q) { return q.toLowerCase().trim().split(/\s+/).filter(Boolean); }
   function searchComplexes(query) {
     const tokens = tokenize(query);
     if (!tokens.length) return [];
@@ -267,12 +312,10 @@
 
   // ---------- Subscriptions ----------
   function addComplex(cxId) {
-    if (!COMPLEXES_BY_ID[cxId]) return;
-    if (findSubIndex(cxId, "*") !== -1) return;
-    // If there's an N or S sub for this complex but no "*" one, leave it as
-    // is — the user explicitly picked a direction. Otherwise default to "*".
-    if (findSubIndex(cxId, "N") !== -1 || findSubIndex(cxId, "S") !== -1) return;
-    state.subs.push({ cx: cxId, dir: "*", lines: [], mins: 0 });
+    const cx = COMPLEXES_BY_ID[cxId];
+    if (!cx) return;
+    if (findSubIndex(cxId) !== -1) return;
+    state.subs.push({ cx: cxId, mins: 0, lines: defaultLineSpecs(cx) });
     searchEl.value = "";
     resultsEl.hidden = true;
     searchEl.focus();
@@ -282,6 +325,26 @@
   function toggleExpanded(cxId) {
     if (state.expanded[cxId]) delete state.expanded[cxId]; else state.expanded[cxId] = true;
     renderSelected();
+  }
+  function toggleLine(sub, line, complex) {
+    const idx = sub.lines.findIndex((l) => l.line === line);
+    if (idx === -1) sub.lines.push({ line, dir: "*" });
+    else sub.lines.splice(idx, 1);
+    // Keep complex-line order for stable URL output.
+    sub.lines.sort((a, b) => complex.lines.indexOf(a.line) - complex.lines.indexOf(b.line));
+    renderSelected();
+    renderUrl();
+    saveToStorage();
+  }
+  function setLineDir(sub, line, dir) {
+    const entry = sub.lines.find((l) => l.line === line);
+    if (entry) entry.dir = dir;
+    renderSelected();
+    renderUrl();
+    saveToStorage();
+  }
+  function setSubMins(sub, mins) {
+    sub.mins = mins;
   }
 
   function renderSelected() {
@@ -299,7 +362,7 @@
       if (!cx) return;
       const isOpen = !!state.expanded[sub.cx];
 
-      // ----- compact header: chevron + name/meta + direction toggle + remove
+      // ----- compact row: chevron + name/meta + mins input + remove
       const toggleBtn = el("button", {
         class: "selected__toggle",
         attrs: { type: "button", title: isOpen ? "Collapse" : "Expand", "aria-expanded": isOpen ? "true" : "false" },
@@ -313,62 +376,9 @@
           el("span", { class: "muted", text: cx.borough || "" }),
         ),
       );
-      const dirToggle = el("div", { class: "dir-toggle", attrs: { role: "radiogroup" } });
-      [
-        ["N", cx.n_short || "N", "Northbound"],
-        ["S", cx.s_short || "S", "Southbound"],
-        ["*", "Both", "Both directions"],
-      ].forEach(([dir, text, title]) => {
-        const btn = el("button", {
-          attrs: { type: "button", title, "aria-pressed": sub.dir === dir ? "true" : "false" },
-          dataset: { dir },
-          text,
-          on: { click: () => { setSubDir(idx, dir); syncAll(); } },
-        });
-        dirToggle.appendChild(btn);
-      });
-      const removeBtn = el("button", {
-        class: "remove-btn",
-        attrs: { type: "button", title: "Remove" },
-        text: "×",
-        on: { click: () => removeAt(idx) },
-      });
-      const headerRow = el("div", { class: "selected__row" }, toggleBtn, main, dirToggle, removeBtn);
 
-      // ----- expanded body: line checkboxes + single min-mins
-      const body = el("div", { class: "selected__body" });
-      body.hidden = !isOpen;
-
-      const linesLabel = el("p", { class: "selected__body-label", text: "Lines to show" });
-      const linesGrid = el("div", { class: "lines-grid" });
-      const allActive = !sub.lines || sub.lines.length === 0;
-      cx.lines.forEach((line) => {
-        const isActive = allActive || sub.lines.includes(line);
-        const chip = el("button", {
-          class: "line-pick" + (isActive ? " line-pick--on" : ""),
-          attrs: { type: "button", "aria-pressed": isActive ? "true" : "false" },
-          on: { click: () => {
-            // If currently "all" (empty), switching becomes explicit selection.
-            let current = sub.lines && sub.lines.length ? sub.lines.slice() : cx.lines.slice();
-            if (current.includes(line)) {
-              current = current.filter((l) => l !== line);
-            } else {
-              current.push(line);
-            }
-            // Normalise: if all lines selected, store as empty (= "all").
-            if (current.length === cx.lines.length) current = [];
-            sub.lines = current;
-            renderSelected();
-            renderUrl();
-            saveToStorage();
-          } },
-        });
-        chip.appendChild(bullet(line));
-        linesGrid.appendChild(chip);
-      });
-
-      const minsLabel = el("p", { class: "selected__body-label", text: "Hide trains arriving sooner than" });
-      const minsRow = el("div", { class: "mins-row" });
+      // Inline min-mins control
+      const minsControl = el("label", { class: "mins-inline", attrs: { title: "Hide trains arriving sooner than this (minutes from now)" } });
       const minsInput = el("input", {
         attrs: { type: "number", min: "0", max: "120", step: "1", placeholder: "0" },
       });
@@ -376,22 +386,68 @@
       minsInput.addEventListener("input", () => {
         const v = parseInt(minsInput.value, 10);
         const next = Number.isFinite(v) && v > 0 ? Math.min(v, 120) : 0;
-        setSubMins(sub.cx, next);
+        setSubMins(sub, next);
         renderUrl();
         saveToStorage();
       });
-      minsInput.addEventListener("blur", () => {
-        minsInput.value = sub.mins > 0 ? String(sub.mins) : "";
-      });
-      minsRow.appendChild(minsInput);
-      minsRow.appendChild(el("span", { class: "mins-row__suffix", text: "minutes from now" }));
-      const minsNote = el("p", { class: "selected__body-note", text: "Trains arriving sooner than this won't be shown. Useful if it takes you N minutes to walk to the station." });
+      minsInput.addEventListener("blur", () => { minsInput.value = sub.mins > 0 ? String(sub.mins) : ""; });
+      minsControl.appendChild(minsInput);
+      minsControl.appendChild(el("span", { class: "mins-inline__suffix", text: "min+" }));
 
-      body.appendChild(linesLabel);
-      body.appendChild(linesGrid);
-      body.appendChild(minsLabel);
-      body.appendChild(minsRow);
-      body.appendChild(minsNote);
+      const removeBtn = el("button", {
+        class: "remove-btn",
+        attrs: { type: "button", title: "Remove" },
+        text: "×",
+        on: { click: () => removeAt(idx) },
+      });
+
+      const headerRow = el("div", { class: "selected__row" }, toggleBtn, main, minsControl, removeBtn);
+
+      // ----- expanded body: one row per line at the complex
+      const body = el("div", { class: "selected__body" });
+      body.hidden = !isOpen;
+      const note = el("p", { class: "selected__body-note", text: "Pick the lines and the direction for each. Trains arriving in less than the “min+” minutes won't be shown." });
+      body.appendChild(note);
+
+      const lineList = el("div", { class: "line-rows" });
+      cx.lines.forEach((line) => {
+        const entry = sub.lines.find((l) => l.line === line);
+        const isOn = !!entry;
+        const info = (LINE_INFO[sub.cx] || {})[line] || {};
+        const row = el("div", { class: "line-row" + (isOn ? "" : " line-row--off") });
+
+        const cb = el("input", { attrs: { type: "checkbox" } });
+        cb.checked = isOn;
+        cb.addEventListener("change", () => toggleLine(sub, line, cx));
+
+        const cbWrap = el("label", { class: "line-row__cb" });
+        cbWrap.appendChild(cb);
+
+        const bul = bullet(line);
+
+        const dirGroup = el("div", { class: "dir-toggle dir-toggle--row", attrs: { role: "radiogroup" } });
+        const currentDir = entry ? entry.dir : "*";
+        [
+          ["N", info.n_short || "N", info.n_label || "Northbound"],
+          ["S", info.s_short || "S", info.s_label || "Southbound"],
+          ["*", "Both", "Both directions"],
+        ].forEach(([dir, text, title]) => {
+          const btn = el("button", {
+            attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false", disabled: isOn ? null : "" },
+            dataset: { dir },
+            text,
+            on: { click: () => { if (isOn) setLineDir(sub, line, dir); } },
+          });
+          if (!isOn) btn.disabled = true;
+          dirGroup.appendChild(btn);
+        });
+
+        row.appendChild(cbWrap);
+        row.appendChild(bul);
+        row.appendChild(dirGroup);
+        lineList.appendChild(row);
+      });
+      body.appendChild(lineList);
 
       const li = el("li", { class: "selected__item" }, headerRow, body);
       list.appendChild(li);
@@ -404,9 +460,7 @@
   nInput.addEventListener("input", () => {
     const v = parseInt(nInput.value, 10);
     if (Number.isFinite(v)) state.n = Math.max(1, Math.min(v, 20));
-    renderSelected();
-    renderUrl();
-    saveToStorage();
+    renderUrl(); saveToStorage();
   });
   nInput.addEventListener("blur", () => { nInput.value = String(state.n); });
   dInput.addEventListener("change", () => { state.showDest = dInput.checked; syncAll(); });
@@ -426,7 +480,6 @@
     });
   });
 
-  // Expand all / Collapse all
   const expandAllBtn = document.getElementById("expand-all");
   const collapseAllBtn = document.getElementById("collapse-all");
   if (expandAllBtn) expandAllBtn.addEventListener("click", () => {
@@ -440,25 +493,34 @@
   });
 
   // ---------- URL preview + open ----------
+  function subToUrlValue(sub) {
+    const cx = COMPLEXES_BY_ID[sub.cx];
+    if (!cx) return null;
+    if (!sub.lines.length) return null;
+    const dirs = new Set(sub.lines.map((l) => l.dir));
+    const allLinesIncluded = sub.lines.length === cx.lines.length;
+    if (allLinesIncluded && dirs.size === 1) {
+      const only = [...dirs][0];
+      return only === "*" ? "cx" + sub.cx : "cx" + sub.cx + ":" + only;
+    }
+    return "cx" + sub.cx + ":" + sub.lines.map((l) => l.line + "=" + l.dir).join(",");
+  }
+
   function buildPath() {
     const params = new URLSearchParams();
     state.subs.forEach((s) => {
-      let v = "cx" + s.cx + ":" + s.dir;
-      if (s.lines && s.lines.length) v += ":" + s.lines.join(",");
-      params.append("s", v);
+      const v = subToUrlValue(s);
+      if (v) params.append("s", v);
     });
-    const seen = new Set();
     state.subs.forEach((s) => {
-      if (s.mins > 0 && !seen.has(s.cx)) {
-        params.append("m", "cx" + s.cx + ":" + s.mins);
-        seen.add(s.cx);
-      }
+      if (s.mins > 0) params.append("m", "cx" + s.cx + ":" + s.mins);
     });
     params.set("n", String(state.n));
     params.set("d", state.showDest ? "1" : "0");
     params.set("f", state.fontSize);
     return "/display?" + params.toString();
   }
+
   function renderUrl() {
     const path = buildPath();
     const full = window.location.origin + path;

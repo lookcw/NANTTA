@@ -49,13 +49,19 @@ class TrainRow:
 
 def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
     """Merge upcoming arrivals across every stop in the subscription's
-    complex, filter by direction + included lines + per-complex min-minutes,
+    complex, applying per-line direction filters + per-complex min-minutes,
     sort by arrival_epoch, slice to ``limit``.
+
+    ``sub.line_specs`` is a tuple of ``(line, direction)``. A line not present
+    in the tuple is excluded entirely. ``direction == "*"`` matches either way.
+    Express route_ids (``6X``, ``7X``) are matched against their stripped form
+    (``6``, ``7``) so the user picks "6" and the express trains come along.
     """
     cx = registry.get_complex(sub.complex_id)
-    if cx is None:
+    if cx is None or not sub.line_specs:
         return []
-    allowed_lines = set(sub.lines) if sub.lines else None
+
+    line_dir: dict[str, str] = {ls.line: ls.direction for ls in sub.line_specs}
 
     merged: list[Arrival] = []
     for sid in cx.stop_ids:
@@ -66,9 +72,11 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
     rows: list[TrainRow] = []
     seen_trips: set[str] = set()
     for a in merged:
-        if sub.direction != "*" and a.direction != sub.direction:
+        base_line = a.route_id[:-1] if a.route_id.endswith("X") and len(a.route_id) > 1 else a.route_id
+        wanted_dir = line_dir.get(base_line)
+        if wanted_dir is None:
             continue
-        if allowed_lines is not None and a.route_id not in allowed_lines:
+        if wanted_dir != "*" and a.direction != wanted_dir:
             continue
         if min_seconds and (a.arrival_epoch - now) < min_seconds:
             continue
@@ -107,39 +115,6 @@ def format_eta(seconds: int) -> str:
     return f"{(seconds + 30) // 60} min"
 
 
-# ---------------- card subtitle ----------------
-
-
-def _sub_direction_label(sub: Subscription) -> str | None:
-    """Friendly direction subtitle for a card. Only shown when every stop in
-    the subscription's complex that *carries one of the included lines* agrees
-    on the platform-level label for the chosen direction.
-
-    Returns ``None`` for "*", for disagreement across stops, or when any
-    relevant stop is missing a label (terminal platforms).
-    """
-    if sub.direction not in ("N", "S"):
-        return None
-    cx = registry.get_complex(sub.complex_id)
-    if cx is None:
-        return None
-    allowed_lines = set(sub.lines) if sub.lines else None
-    labels: set[str] = set()
-    for sid in cx.stop_ids:
-        st = registry.get(sid)
-        if not st:
-            continue
-        if allowed_lines is not None and not (set(st.lines) & allowed_lines):
-            continue
-        label = registry.direction_label(sid, sub.direction)
-        if not label:
-            return None
-        labels.add(label)
-    if len(labels) != 1:
-        return None
-    return next(iter(labels))
-
-
 # ---------------- top-level render ----------------
 
 
@@ -156,7 +131,9 @@ def render_card(
     ctx = {
         "sub": sub,
         "complex": cx,
-        "direction_label": _sub_direction_label(sub),
+        # No card-level direction subtitle in the per-line model — each train
+        # chip carries its own borough badge instead.
+        "direction_label": None,
         "rows": rows,
         "now": now,
         "show_dest": show_dest,

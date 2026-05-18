@@ -98,11 +98,23 @@ def _read_font_size(request: HttpRequest) -> str:
 
 
 def _sub_to_url_value(sub) -> str:
-    """Canonical URL-form value for a Subscription's ``s=`` param."""
-    base = f"cx{sub.complex_id}:{sub.direction}"
-    if sub.lines:
-        base += ":" + ",".join(sub.lines)
-    return base
+    """Canonical URL form for a Subscription's ``s=`` param.
+
+    - All complex lines + same direction → ``cx<id>[:<dir>]`` shorthand
+    - Otherwise → ``cx<id>:line1=dir1,line2=dir2,...``
+    """
+    cx = registry.get_complex(sub.complex_id)
+    if cx is None or not sub.line_specs:
+        return f"cx{sub.complex_id}"
+
+    dirs = {ls.direction for ls in sub.line_specs}
+    sub_lines = {ls.line for ls in sub.line_specs}
+    if sub_lines == set(cx.lines) and len(dirs) == 1:
+        only_dir = next(iter(dirs))
+        return f"cx{sub.complex_id}" if only_dir == "*" else f"cx{sub.complex_id}:{only_dir}"
+
+    parts = [f"{ls.line}={ls.direction}" for ls in sub.line_specs]
+    return f"cx{sub.complex_id}:" + ",".join(parts)
 
 
 @require_GET
@@ -200,17 +212,27 @@ def setup(request: HttpRequest):
     complexes_list = []
     for cid, row in complexes_raw.items():
         member_stops = [stops_raw[sid] for sid in row.get("stop_ids", []) if sid in stops_raw]
-        # Direction borough codes: pick the most common derivable code across
-        # member platforms (terminal-only platforms with no label are skipped).
-        n_codes = [direction_borough_short(m.get("north_label")) for m in member_stops]
-        s_codes = [direction_borough_short(m.get("south_label")) for m in member_stops]
-        n_codes = [c for c in n_codes if c]
-        s_codes = [c for c in s_codes if c]
-        n_short = max(set(n_codes), key=n_codes.count) if n_codes else ""
-        s_short = max(set(s_codes), key=s_codes.count) if s_codes else ""
 
-        # Search corpus: tokens from member names + stop_ids + the complex's
-        # own name and id so the search hits whatever a user might type.
+        # Per-line direction labels: each line at this complex carries its
+        # own N/S labels (from whichever platform actually serves that line).
+        # Setup uses these so the per-line toggle says "QNS / MAN / Both"
+        # with the correct codes for that line.
+        line_info: list[dict] = []
+        for line in row.get("lines") or []:
+            n_label = ""
+            s_label = ""
+            for stop in member_stops:
+                if line in (stop.get("lines") or []):
+                    n_label = n_label or (stop.get("north_label") or "")
+                    s_label = s_label or (stop.get("south_label") or "")
+            line_info.append({
+                "line": line,
+                "n_label": n_label or None,
+                "s_label": s_label or None,
+                "n_short": direction_borough_short(n_label),
+                "s_short": direction_borough_short(s_label),
+            })
+
         haystack_tokens: set[str] = set()
         haystack_tokens.add(row.get("name") or "")
         haystack_tokens.add(cid)
@@ -226,9 +248,8 @@ def setup(request: HttpRequest):
             "name": row.get("name") or cid,
             "borough": row.get("borough") or "",
             "lines": list(row.get("lines") or []),
+            "line_info": line_info,
             "stop_ids": list(row.get("stop_ids") or []),
-            "n_short": n_short,
-            "s_short": s_short,
             "haystack": haystack,
         })
     complexes_list.sort(key=lambda c: c["name"])

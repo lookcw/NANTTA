@@ -496,30 +496,34 @@ html, body {
   border-radius: 8px;
   padding: 10px 12px;
 }
+/* (see selected__row block defined below — kept here for backward removal note) */
+
+/* Compact row layout: 4 columns desktop, wrap on narrow */
 .selected__row {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
-  gap: 10px;
   align-items: center;
+  gap: 10px;
 }
-.selected__row .dir-toggle { justify-self: end; }
-
-/* On narrow viewports the dir-toggle would crash into the station name.
-   Stack: row 1 has [chevron] [name/meta] [remove], row 2 has the dir-toggle
-   spanning the content width. */
 @media (max-width: 640px) {
   .selected__row {
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "toggle main remove"
-      "dir    dir  dir";
+      "toggle main   remove"
+      "mins   mins   mins";
     row-gap: 8px;
   }
   .selected__row > .selected__toggle { grid-area: toggle; }
   .selected__row > .selected__main { grid-area: main; min-width: 0; }
-  .selected__row > .dir-toggle { grid-area: dir; justify-self: stretch; }
+  .selected__row > .mins-inline { grid-area: mins; justify-self: start; }
   .selected__row > .remove-btn { grid-area: remove; }
   .selected__name { font-size: 15px; }
+  /* The per-line direction toggle has fewer options to fit at narrow widths,
+     so let buttons wrap. */
+  .dir-toggle--row {
+    flex-wrap: wrap;
+    justify-self: end;
+  }
 }
 .selected__toggle {
   background: transparent;
@@ -565,57 +569,78 @@ html, body {
   letter-spacing: 0.1em;
   margin: 0 0 6px;
 }
-/* Line picker (chips for include/exclude per line) */
-.lines-grid {
+/* Per-line rows inside the expanded body */
+.line-rows {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
+  margin-top: 8px;
 }
-.line-pick {
-  background: transparent;
+.line-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: #141414;
   border: 1px solid var(--panel-border);
-  border-radius: 999px;
-  padding: 3px 6px 3px 3px;
+  border-radius: 8px;
+  transition: opacity 120ms;
+}
+.line-row--off {
+  opacity: 0.45;
+}
+.line-row__cb {
+  display: inline-flex;
+  align-items: center;
   cursor: pointer;
+}
+.line-row__cb input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.line-row .mini-bullet { width: 26px; height: 26px; font-size: 14px; }
+.dir-toggle--row {
+  justify-self: end;
+  flex-wrap: nowrap;
+}
+
+/* Compact-row inline min-mins control */
+.mins-inline {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font: inherit;
-  opacity: 0.45;
-}
-.line-pick:hover { opacity: 0.8; border-color: var(--text-dim); }
-.line-pick--on { opacity: 1; border-color: var(--accent); }
-.line-pick .mini-bullet { width: 22px; height: 22px; font-size: 12px; }
-
-/* Per-complex min-mins input */
-.mins-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #141414;
+  background: #0c0c0c;
   border: 1px solid var(--panel-border);
   border-radius: 6px;
-  padding: 6px 12px 6px 8px;
+  padding: 4px 8px 4px 6px;
+  cursor: text;
 }
-.mins-row input {
+.mins-inline input {
   background: transparent;
   border: 0;
   color: var(--text);
   font: inherit;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  width: 56px;
+  width: 36px;
   padding: 2px 0;
   text-align: right;
-  border-bottom: 1px solid transparent;
   outline: none;
 }
-.mins-row input:focus { border-bottom-color: var(--accent); }
-.mins-row__suffix { color: var(--text-dim); font-size: 12px; letter-spacing: 0.04em; }
+.mins-inline input:focus { color: var(--accent); }
+.mins-inline__suffix {
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
 .selected__body-note {
   color: var(--text-dimmer);
   font-size: 12px;
-  margin: 4px 0 0;
+  margin: 0 0 4px;
   line-height: 1.4;
 }
 
