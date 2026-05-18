@@ -16,7 +16,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from .cache import cache
-from .render import feed_age_seconds, render_card
+from .render import card_payload, feed_age_seconds, render_card
 from .stations import registry
 from .subscriptions import LineSpec, Subscription, parse as parse_subs
 
@@ -205,17 +205,16 @@ def display_stream(request: HttpRequest):
     return resp
 
 
-@require_GET
-def setup(request: HttpRequest):
-    """Render the setup page with the complex list embedded as JSON.
+def _complex_catalog() -> list[dict]:
+    """Build the per-complex catalog used by both the setup page and the
+    JSON /api/stations endpoint.
 
-    Setup now operates on complexes (one row per transfer station) rather
-    than per-platform stop_ids. Each complex carries:
+    One row per MTA station complex (445-ish) with:
       - id, name, borough, lines (union of member lines)
-      - n_short / s_short: best-effort borough codes for the direction toggle
-      - search_haystack: extra tokens for the search box (member stop_ids and
-        per-platform names) so typing "F09" or "Court Sq-23 St" still finds
-        the Court Sq complex.
+      - line_info[]: per-line N/S labels + borough shorts so each line in a
+        complex can render its own direction toggle.
+      - haystack: extra tokens (member stop_ids, per-platform names) for the
+        search box — typing "F09" or "Court Sq-23 St" finds the Court Sq complex.
     """
     from .stations import STATIONS_JSON, direction_borough_short
     try:
@@ -226,14 +225,10 @@ def setup(request: HttpRequest):
     stops_raw = raw.get("stops") or {}
     complexes_raw = raw.get("complexes") or {}
 
-    complexes_list = []
+    complexes_list: list[dict] = []
     for cid, row in complexes_raw.items():
         member_stops = [stops_raw[sid] for sid in row.get("stop_ids", []) if sid in stops_raw]
 
-        # Per-line direction labels: each line at this complex carries its
-        # own N/S labels (from whichever platform actually serves that line).
-        # Setup uses these so the per-line toggle says "QNS / MAN / Both"
-        # with the correct codes for that line.
         line_info: list[dict] = []
         for line in row.get("lines") or []:
             n_label = ""
@@ -270,6 +265,40 @@ def setup(request: HttpRequest):
             "haystack": haystack,
         })
     complexes_list.sort(key=lambda c: c["name"])
+    return complexes_list
+
+
+@require_GET
+def setup(request: HttpRequest):
+    """Render the setup page with the complex list embedded as JSON."""
     return render(request, "trains/setup.html", {
-        "stations_json": json.dumps(complexes_list),
+        "stations_json": json.dumps(_complex_catalog()),
+    })
+
+
+@require_GET
+def api_stations(request: HttpRequest):
+    """Per-complex catalog for the React Setup page."""
+    return JsonResponse({"complexes": _complex_catalog()})
+
+
+@require_GET
+def api_display(request: HttpRequest):
+    """Initial payload for the React Display page.
+
+    Accepts the same query params as /display (s=, m=, n=, f=, d=) so URL
+    bookmarks stay compatible.
+    """
+    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
+    if _read_legacy_hide_dest(request):
+        subs = _apply_legacy_hide_dest(subs)
+    font_size = _read_font_size(request)
+    n = _read_n(request, default=3)
+    now = int(time.time())
+    return JsonResponse({
+        "server_now": now,
+        "feed_age_seconds": feed_age_seconds(now),
+        "trains_per_card": n,
+        "font_size": font_size,
+        "subs": [card_payload(s, now=now, limit=n) for s in subs],
     })

@@ -121,6 +121,50 @@ def format_eta(seconds: int) -> str:
 # ---------------- top-level render ----------------
 
 
+def card_payload(
+    sub: Subscription,
+    now: int | None = None,
+    limit: int = 3,
+) -> dict:
+    """JSON-serializable shape of one card for the React client.
+
+    Mirrors what ``render_card`` packs into the template — the React side
+    decides chip vs train-row layout from ``any_show_dest`` the same way.
+    """
+    if now is None:
+        now = int(time.time())
+    cx = registry.get_complex(sub.complex_id)
+    rows = upcoming(sub, now=now, limit=limit)
+    any_show_dest = any(r.show_dest for r in rows) if rows else True
+    return {
+        "card_id": sub.card_id,
+        "complex_id": sub.complex_id,
+        "complex": {
+            "id": cx.id,
+            "name": cx.name,
+            "borough": cx.borough,
+            "lines": list(cx.lines),
+        } if cx else None,
+        "any_show_dest": any_show_dest,
+        "rows": [
+            {
+                "route": r.route,
+                "route_color": r.route_color,
+                "route_text_color": r.route_text_color,
+                "is_express": r.is_express,
+                "direction": r.direction,
+                "terminus_name": r.terminus_name,
+                "direction_borough_short": r.direction_borough_short,
+                "arrival_epoch": r.arrival_epoch,
+                "seconds_until": r.seconds_until,
+                "display": r.display,
+                "show_dest": r.show_dest,
+            }
+            for r in rows
+        ],
+    }
+
+
 def render_card(
     sub: Subscription,
     now: int | None = None,
