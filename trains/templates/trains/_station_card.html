@@ -1,16 +1,12 @@
 {% load static %}
-<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ sub.card_id }}" data-stop-id="{{ sub.stop_id }}" data-direction="{{ sub.direction }}">
+<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ group.card_id }}" data-complex-id="{{ complex.id }}" data-direction="{{ group.direction }}">
   <header class="card__header">
-    <h2 class="card__name">{{ station.name|default:sub.stop_id }}</h2>
+    <h2 class="card__name">{{ complex.name|default:complex.id }}</h2>
     <div class="card__sub">
-      {% if sub.direction == 'N' or sub.direction == 'S' %}
-        {% if direction_label %}
-          <span class="card__dir">to {{ direction_label }}</span>
-        {% else %}
-          <span class="card__dir card__dir--terminal">terminal</span>
-        {% endif %}
+      {% if direction_label %}
+        <span class="card__dir">to {{ direction_label }}</span>
       {% endif %}
-      {% if station.borough %}<span class="card__borough">{{ station.borough }}</span>{% endif %}
+      {% if complex.borough %}<span class="card__borough">{{ complex.borough }}</span>{% endif %}
     </div>
   </header>
 
@@ -32,7 +28,7 @@
         <li class="chip">
           <span class="bullet bullet--sm{% if row.is_express %} bullet--express{% endif %}" style="background:{{ row.route_color }};color:{{ row.route_text_color }};"><span class="bullet__label">{{ row.route }}</span></span>
           <span class="chip__eta" data-arrival-epoch="{{ row.arrival_epoch }}">{{ row.display }}</span>
-          {% if sub.direction == '*' and row.terminus_borough_short %}<span class="chip__dir">{{ row.terminus_borough_short }}</span>{% endif %}
+          {% if group.direction == '*' and row.terminus_borough_short %}<span class="chip__dir">{{ row.terminus_borough_short }}</span>{% endif %}
         </li>
       {% empty %}
         <li class="chip chip--empty">no upcoming trains</li>

@@ -1,5 +1,9 @@
 """Shared rendering helpers for the wall display.
 
+Subscriptions are per-stop in URLs/localStorage. Right before rendering, we
+group them by ``(complex_id, direction)`` so all subscribed platforms in a
+transfer complex merge into one card.
+
 Both the initial page render and the SSE Turbo Stream updates build their HTML
 through ``render_card`` so they're guaranteed to stay in sync.
 """
@@ -14,7 +18,7 @@ from django.template.loader import render_to_string
 from .cache import cache
 from .line_colors import color_for, text_color_for
 from .parser import Arrival
-from .stations import registry
+from .stations import Complex, registry
 from .subscriptions import Subscription
 
 
@@ -25,6 +29,66 @@ BOROUGH_SHORT = {
     "Queens": "QNS",
     "Staten Island": "SI",
 }
+
+
+# ---------------- grouping ----------------
+
+
+@dataclass(frozen=True, slots=True)
+class CardGroup:
+    """One rendered card. Multiple subscribed platforms in the same complex +
+    direction merge into one of these."""
+
+    complex: Complex
+    direction: str              # "N", "S", or "*"
+    stop_ids: tuple[str, ...]   # subscribed stop_ids in this group (sorted)
+
+    @property
+    def card_id(self) -> str:
+        return f"card-cx{self.complex.id}-{self.direction}"
+
+
+def group_subscriptions(subs: list[Subscription]) -> list[CardGroup]:
+    """Group per-stop subscriptions by (complex_id, direction).
+
+    Order: groups appear in the order they first occur among ``subs``;
+    stops within a group are sorted by stop_id so the card_id and merged
+    contents are stable regardless of subscription order.
+
+    Unknown stop_ids fall back to a one-stop synthetic complex so user URLs
+    never produce a blank card.
+    """
+    members: dict[tuple[str, str], list[str]] = {}
+    complex_by_id: dict[str, Complex] = {}
+    order: list[tuple[str, str]] = []
+
+    for s in subs:
+        cx = registry.complex_for_stop(s.stop_id)
+        if cx is None:
+            cx = Complex(
+                id=s.stop_id, name=s.stop_id, borough="",
+                lines=(), stop_ids=(s.stop_id,),
+            )
+        complex_by_id.setdefault(cx.id, cx)
+
+        key = (cx.id, s.direction)
+        if key not in members:
+            members[key] = []
+            order.append(key)
+        if s.stop_id not in members[key]:
+            members[key].append(s.stop_id)
+
+    return [
+        CardGroup(
+            complex=complex_by_id[cx_id],
+            direction=direction,
+            stop_ids=tuple(sorted(members[(cx_id, direction)])),
+        )
+        for cx_id, direction in order
+    ]
+
+
+# ---------------- arrivals ----------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,12 +105,22 @@ class TrainRow:
     display: str  # "now" or "3 min" — JS may overwrite on per-second tick
 
 
-def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
-    arrivals = cache.for_stop(sub.stop_id, limit=30)
+def upcoming(group: CardGroup, now: int, limit: int = 3) -> list[TrainRow]:
+    """Merge upcoming arrivals across every stop in the group's complex,
+    filter by direction, sort by arrival_epoch, slice to ``limit``."""
+    merged: list[Arrival] = []
+    for sid in group.stop_ids:
+        merged.extend(cache.for_stop(sid, limit=30))
+    merged.sort(key=lambda a: a.arrival_epoch)
+
     rows: list[TrainRow] = []
-    for a in arrivals:
-        if sub.direction != "*" and a.direction != sub.direction:
+    seen_trips: set[str] = set()  # dedupe in case the same trip appears at sibling platforms
+    for a in merged:
+        if group.direction != "*" and a.direction != group.direction:
             continue
+        if a.trip_id in seen_trips:
+            continue
+        seen_trips.add(a.trip_id)
         rows.append(_to_row(a, now))
         if len(rows) >= limit:
             break
@@ -79,25 +153,64 @@ def format_eta(seconds: int) -> str:
     return f"{(seconds + 30) // 60} min"
 
 
+# ---------------- card subtitle ----------------
+
+
+def _group_direction_label(group: CardGroup) -> str | None:
+    """Friendly direction subtitle for a card, only when every stop in the
+    group agrees on the platform-level label for the chosen direction.
+
+    Returns ``None`` for "*", for groups whose members disagree, or when any
+    member is missing a label (e.g. terminal platforms).
+    """
+    if group.direction not in ("N", "S"):
+        return None
+    labels: set[str] = set()
+    for sid in group.stop_ids:
+        label = registry.direction_label(sid, group.direction)
+        if not label:
+            return None  # missing label on any stop → suppress
+        labels.add(label)
+    if len(labels) != 1:
+        return None
+    return next(iter(labels))
+
+
+def _subscribed_lines(group: CardGroup) -> list[str]:
+    """Union of the *subscribed* stops' lines (not the whole complex)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for sid in group.stop_ids:
+        st = registry.get(sid)
+        if not st:
+            continue
+        for line in st.lines:
+            if line not in seen:
+                seen.add(line)
+                out.append(line)
+    # Stable sort — digits first, then letters.
+    out.sort(key=lambda l: (0, int(l)) if l.isdigit() else (1, l))
+    return out
+
+
+# ---------------- top-level render ----------------
+
+
 def render_card(
-    sub: Subscription,
+    group: CardGroup,
     now: int | None = None,
     limit: int = 3,
     show_dest: bool = True,
 ) -> str:
     if now is None:
         now = int(time.time())
-    station = registry.get(sub.stop_id)
-    direction_label = (
-        registry.direction_label(sub.stop_id, sub.direction)
-        if sub.direction in ("N", "S")
-        else None
-    )
-    rows = upcoming(sub, now=now, limit=limit)
+    rows = upcoming(group, now=now, limit=limit)
     ctx = {
-        "sub": sub,
-        "station": station,
-        "direction_label": direction_label,
+        "group": group,
+        "complex": group.complex,
+        "direction_label": _group_direction_label(group),
+        "lines": _subscribed_lines(group),
+        "is_multi_stop": len(group.stop_ids) > 1,
         "rows": rows,
         "now": now,
         "show_dest": show_dest,

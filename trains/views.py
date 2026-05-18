@@ -16,7 +16,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from .cache import cache
-from .render import feed_age_seconds, render_card
+from .render import feed_age_seconds, group_subscriptions, render_card
 from .stations import registry
 from .subscriptions import parse as parse_subs
 
@@ -100,7 +100,8 @@ def display(request: HttpRequest):
     # visually shorter so we can fit more before getting cluttered.
     n = _read_n(request, default=6 if not show_dest else 3)
     now = int(time.time())
-    cards = [render_card(s, now=now, limit=n, show_dest=show_dest) for s in subs]
+    groups = group_subscriptions(subs)
+    cards = [render_card(g, now=now, limit=n, show_dest=show_dest) for g in groups]
     stream_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
     stream_params.append(("n", str(n)))
     stream_params.append(("d", "1" if show_dest else "0"))
@@ -127,6 +128,7 @@ def display_stream(request: HttpRequest):
         return HttpResponseBadRequest("missing 's' subscriptions")
     show_dest = _read_show_dest(request)
     n = _read_n(request, default=6 if not show_dest else 3)
+    groups = group_subscriptions(subs)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
@@ -136,10 +138,10 @@ def display_stream(request: HttpRequest):
         while True:
             now = int(time.time())
             payload_parts: list[str] = []
-            for s in subs:
-                html = render_card(s, now=now, limit=n, show_dest=show_dest)
+            for g in groups:
+                html = render_card(g, now=now, limit=n, show_dest=show_dest)
                 payload_parts.append(
-                    f'<turbo-stream action="replace" target="{s.card_id}">'
+                    f'<turbo-stream action="replace" target="{g.card_id}">'
                     f'<template>{html}</template></turbo-stream>'
                 )
             # SSE: collapse any newlines in the payload into one "data:" line
@@ -160,18 +162,20 @@ def display_stream(request: HttpRequest):
 
 @require_GET
 def setup(request: HttpRequest):
-    """Render the setup page with all stations embedded as JSON for the client."""
-    stations_list = []
-    # Iterate registry's internal map indirectly: we know all stop_ids by
-    # walking the keys; the registry doesn't expose them publicly so we use
-    # its loaded data via .get over the JSON file. Simpler: read the file.
+    """Render the setup page with all stations embedded as JSON for the client.
+
+    Per the design: /setup search and Selected list stay per-stop. The
+    complex grouping is applied at render time on /display, not here.
+    """
     from .stations import STATIONS_JSON
     try:
         with open(STATIONS_JSON, encoding="utf-8") as f:
             raw = json.load(f)
     except FileNotFoundError:
         raw = {}
-    for stop_id, row in raw.items():
+    stops_raw = raw.get("stops") or {}
+    stations_list = []
+    for stop_id, row in stops_raw.items():
         stations_list.append({
             "id": stop_id,
             "name": row.get("name") or stop_id,
