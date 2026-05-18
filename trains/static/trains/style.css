@@ -224,11 +224,14 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 12px 4px 4px;
+  padding: 4px 14px 4px 4px;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
   line-height: 1;
-  min-width: 0;          /* allow chips to shrink instead of overflowing */
+  /* Keep chips at their natural content size; rely on flex-wrap on .chips
+     to push to a new row when they don't fit. Without this, flexbox would
+     shrink chips and clip the borough badge / next bullet. */
+  flex-shrink: 0;
 }
 .chip__eta {
   font-size: var(--chip-eta-fs);
