@@ -440,37 +440,41 @@
 
         const bul = bullet(line);
 
-        // For terminal lines (G at Court Sq, N/W at Astoria-Ditmars, etc.)
-        // only show the alive direction button + a "(terminating)" note.
         const alive = aliveDirection(cx, line);
-        const dirGroup = el("div", { class: "dir-toggle dir-toggle--row", attrs: { role: "radiogroup" } });
         const currentDir = entry ? entry.dir : (alive || "*");
-        const dirEntries = alive
-          ? [[alive, alive === "N" ? (info.n_short || "N") : (info.s_short || "S"),
-              alive === "N" ? (info.n_label || "Northbound") : (info.s_label || "Southbound")]]
-          : [
-              ["N", info.n_short || "N", info.n_label || "Northbound"],
-              ["S", info.s_short || "S", info.s_label || "Southbound"],
-              ["*", "Both", "Both directions"],
-            ];
-        dirEntries.forEach(([dir, text, title]) => {
-          const btn = el("button", {
-            attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false" },
-            dataset: { dir },
-            text,
-            on: { click: () => { if (isOn) setLineDir(sub, line, dir); } },
-          });
-          btn.disabled = !isOn;
-          dirGroup.appendChild(btn);
-        });
+
+        let dirCell;
         if (alive) {
-          const note = el("span", { class: "line-row__terminus", text: "terminus" });
-          dirGroup.appendChild(note);
+          // Terminating line — no choice to make. Show the direction as a
+          // plain label (not a button) plus a "terminus" note.
+          const shortText = alive === "N" ? (info.n_short || "N") : (info.s_short || "S");
+          const longTitle = alive === "N" ? (info.n_label || "Northbound") : (info.s_label || "Southbound");
+          dirCell = el("div", { class: "line-row__static-dir" },
+            el("span", { class: "line-row__dir-label", attrs: { title: longTitle }, text: shortText }),
+            el("span", { class: "line-row__terminus", text: "terminus" }),
+          );
+        } else {
+          const dirGroup = el("div", { class: "dir-toggle dir-toggle--row", attrs: { role: "radiogroup" } });
+          [
+            ["N", info.n_short || "N", info.n_label || "Northbound"],
+            ["S", info.s_short || "S", info.s_label || "Southbound"],
+            ["*", "Both", "Both directions"],
+          ].forEach(([dir, text, title]) => {
+            const btn = el("button", {
+              attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false" },
+              dataset: { dir },
+              text,
+              on: { click: () => { if (isOn) setLineDir(sub, line, dir); } },
+            });
+            btn.disabled = !isOn;
+            dirGroup.appendChild(btn);
+          });
+          dirCell = dirGroup;
         }
 
         row.appendChild(cbWrap);
         row.appendChild(bul);
-        row.appendChild(dirGroup);
+        row.appendChild(dirCell);
         lineList.appendChild(row);
       });
       body.appendChild(lineList);

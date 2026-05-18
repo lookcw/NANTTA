@@ -607,8 +607,19 @@ html, body {
   flex-wrap: nowrap;
   align-items: center;
 }
+.line-row__static-dir {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.line-row__dir-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
 .line-row__terminus {
-  margin-left: 8px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
