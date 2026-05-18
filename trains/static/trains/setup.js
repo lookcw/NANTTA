@@ -256,16 +256,27 @@
   const nInput = document.getElementById("opt-n");
   const dInput = document.getElementById("opt-d");
   nInput.addEventListener("input", () => {
+    // Don't sync the input value mid-typing — just update state from what's
+    // there and let renderUrl / saveToStorage reflect it. The input itself
+    // keeps whatever the user typed (even if empty or out of range) until blur.
     const v = parseInt(nInput.value, 10);
     if (Number.isFinite(v)) state.n = Math.max(1, Math.min(v, 20));
-    syncAll();
+    renderSelected();
+    renderUrl();
+    saveToStorage();
+  });
+  nInput.addEventListener("blur", () => {
+    // Normalize on blur: empty / invalid / out-of-range falls back to state.n.
+    nInput.value = String(state.n);
   });
   dInput.addEventListener("change", () => {
     state.showDest = dInput.checked;
     syncAll();
   });
   function syncOptions() {
-    nInput.value = String(state.n);
+    // Only update the n input when it's NOT being edited; otherwise we'd
+    // overwrite the user's in-progress keystrokes.
+    if (document.activeElement !== nInput) nInput.value = String(state.n);
     dInput.checked = state.showDest;
   }
 
