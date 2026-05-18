@@ -16,9 +16,6 @@ export function Card({ card, now }: CardProps) {
     <article className={className} id={card.card_id} data-complex-id={card.complex_id}>
       <header className="card__header">
         <h2 className="card__name">{displayName}</h2>
-        <div className="card__sub">
-          {complex?.borough && <span className="card__borough">{complex.borough}</span>}
-        </div>
       </header>
       {any_show_dest ? (
         <ul className="trains">
