@@ -19,8 +19,12 @@
         var subsFromServer = [
           {% for s in subs %}{ id: "{{ s.stop_id|escapejs }}", dir: "{{ s.direction|escapejs }}" }{% if not forloop.last %},{% endif %}{% endfor %}
         ];
+        var filtersFromServer = [
+          {% for key, mins in filters.items %}{ stop: "{{ key.0|escapejs }}", line: "{{ key.1|escapejs }}", mins: {{ mins }} }{% if not forloop.last %},{% endif %}{% endfor %}
+        ];
         localStorage.setItem(KEY, JSON.stringify({
           subs: subsFromServer,
+          filters: filtersFromServer,
           n: {{ trains_per_card }},
           showDest: {% if show_destination %}true{% else %}false{% endif %},
           fontSize: "{{ font_size|escapejs }}"
@@ -36,6 +40,11 @@
         cfg.subs.forEach(function (s) {
           if (s && s.id && ["N", "S", "*"].indexOf(s.dir) !== -1) {
             params.append("s", s.id + ":" + s.dir);
+          }
+        });
+        if (Array.isArray(cfg.filters)) cfg.filters.forEach(function (f) {
+          if (f && f.stop && f.line && Number.isFinite(f.mins) && f.mins > 0) {
+            params.append("m", f.stop + ":" + f.line + ":" + f.mins);
           }
         });
         if (Number.isFinite(cfg.n)) params.set("n", String(cfg.n));

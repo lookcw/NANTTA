@@ -97,35 +97,61 @@ def _read_font_size(request: HttpRequest) -> str:
     return raw if raw in ("s", "m", "l") else "m"
 
 
+def _parse_filters(raw_list: list[str]) -> dict[tuple[str, str], int]:
+    """Parse repeated ``m=<stop_id>:<line>:<min_minutes>`` params.
+
+    Returns a map (stop_id, route_id) -> min_minutes (int). Malformed entries
+    are silently dropped. Negative or absurdly large minutes are clamped.
+    """
+    out: dict[tuple[str, str], int] = {}
+    for raw in raw_list:
+        parts = raw.strip().split(":")
+        if len(parts) != 3:
+            continue
+        stop_id, line, mins_raw = parts[0].strip(), parts[1].strip(), parts[2].strip()
+        if not stop_id or not line:
+            continue
+        try:
+            mins = int(mins_raw)
+        except ValueError:
+            continue
+        mins = max(0, min(mins, 120))
+        if mins <= 0:
+            continue  # 0 = no filter; don't store
+        out[(stop_id, line)] = mins
+    return out
+
+
 @require_GET
 def display(request: HttpRequest):
     subs = parse_subs(request.GET.getlist("s"))
     show_dest = _read_show_dest(request)
     font_size = _read_font_size(request)
+    filters = _parse_filters(request.GET.getlist("m"))
     # When destinations are hidden, default n bumps from 3 to 6 — rows are
     # visually shorter so we can fit more before getting cluttered.
     n = _read_n(request, default=6 if not show_dest else 3)
     now = int(time.time())
     groups = group_subscriptions(subs)
-    cards = [render_card(g, now=now, limit=n, show_dest=show_dest) for g in groups]
-    stream_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
-    stream_params.append(("n", str(n)))
-    stream_params.append(("d", "1" if show_dest else "0"))
-    stream_params.append(("f", font_size))
-    stream_qs = urlencode(stream_params)
-    setup_qs = urlencode(
-        [("s", f"{s.stop_id}:{s.direction}") for s in subs]
-        + [("n", str(n)), ("d", "1" if show_dest else "0"), ("f", font_size)]
-    )
+    cards = [render_card(g, now=now, limit=n, show_dest=show_dest, filters=filters) for g in groups]
+
+    common_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
+    common_params.append(("n", str(n)))
+    common_params.append(("d", "1" if show_dest else "0"))
+    common_params.append(("f", font_size))
+    for (sid, line), mins in filters.items():
+        common_params.append(("m", f"{sid}:{line}:{mins}"))
+
     return render(request, "trains/display.html", {
         "subs": subs,
         "cards": cards,
-        "stream_url": f"/display/stream?{stream_qs}" if subs else "",
-        "setup_url": f"/setup?{setup_qs}" if subs else "/setup",
+        "stream_url": f"/display/stream?{urlencode(common_params)}" if subs else "",
+        "setup_url": f"/setup?{urlencode(common_params)}" if subs else "/setup",
         "feed_age": feed_age_seconds(now),
         "trains_per_card": n,
         "show_destination": show_dest,
         "font_size": font_size,
+        "filters": filters,
     })
 
 
@@ -136,6 +162,7 @@ def display_stream(request: HttpRequest):
         return HttpResponseBadRequest("missing 's' subscriptions")
     show_dest = _read_show_dest(request)
     n = _read_n(request, default=6 if not show_dest else 3)
+    filters = _parse_filters(request.GET.getlist("m"))
     groups = group_subscriptions(subs)
 
     interval = float(request.GET.get("interval", "5"))
@@ -147,7 +174,7 @@ def display_stream(request: HttpRequest):
             now = int(time.time())
             payload_parts: list[str] = []
             for g in groups:
-                html = render_card(g, now=now, limit=n, show_dest=show_dest)
+                html = render_card(g, now=now, limit=n, show_dest=show_dest, filters=filters)
                 payload_parts.append(
                     f'<turbo-stream action="replace" target="{g.card_id}">'
                     f'<template>{html}</template></turbo-stream>'

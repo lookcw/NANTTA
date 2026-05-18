@@ -25,7 +25,13 @@
       </div>
       <ul id="search-results" class="results" hidden></ul>
 
-      <h3 class="panel__subheader">Selected <span id="selected-count" class="muted"></span></h3>
+      <div class="selected-head">
+        <h3 class="panel__subheader">Selected <span id="selected-count" class="muted"></span></h3>
+        <div id="selected-controls" class="selected-controls" hidden>
+          <button id="expand-all" type="button">Expand all</button>
+          <button id="collapse-all" type="button">Collapse all</button>
+        </div>
+      </div>
       <ul id="selected" class="selected"></ul>
       <p id="selected-empty" class="muted selected__empty">No stations yet — search above to add one.</p>
     </section>

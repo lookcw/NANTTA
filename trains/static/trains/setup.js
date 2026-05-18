@@ -4,10 +4,20 @@
 
   const state = {
     subs: [],         // [{id, dir}] where dir is "N" | "S" | "*"
+    filters: {},      // { "<stop_id>::<line>": min_minutes_int } where min > 0
+    expanded: {},     // { "<stop_id>": true } — UI-only, not persisted
     n: 3,
     showDest: true,
     fontSize: "m",    // "s" | "m" | "l"
   };
+
+  function filterKey(stopId, line) { return stopId + "::" + line; }
+  function setFilter(stopId, line, mins) {
+    const k = filterKey(stopId, line);
+    if (Number.isFinite(mins) && mins > 0) state.filters[k] = Math.min(mins, 120);
+    else delete state.filters[k];
+  }
+  function getFilter(stopId, line) { return state.filters[filterKey(stopId, line)] || 0; }
 
   // ---------- DOM helpers ----------
   function el(tag, opts, ...children) {
@@ -71,6 +81,14 @@
       hasSubs = true;
     });
     if (!hasSubs) return false;
+    params.getAll("m").forEach((raw) => {
+      const parts = raw.split(":");
+      if (parts.length !== 3) return;
+      const [stopId, line, minsRaw] = parts;
+      const mins = parseInt(minsRaw, 10);
+      if (!stopId || !line || !Number.isFinite(mins)) return;
+      setFilter(stopId, line, mins);
+    });
     const n = parseInt(params.get("n"), 10);
     if (Number.isFinite(n)) state.n = Math.max(1, Math.min(n, 20));
     const dParam = params.get("d");
@@ -93,6 +111,13 @@
           state.subs.push({ id: s.id, dir: s.dir });
         });
       }
+      if (Array.isArray(cfg.filters)) {
+        cfg.filters.forEach((f) => {
+          if (!f || !f.stop || !f.line) return;
+          const mins = parseInt(f.mins, 10);
+          if (Number.isFinite(mins)) setFilter(f.stop, f.line, mins);
+        });
+      }
       if (Number.isFinite(cfg.n)) state.n = Math.max(1, Math.min(cfg.n, 20));
       if (typeof cfg.showDest === "boolean") state.showDest = cfg.showDest;
       if (["s", "m", "l"].includes(cfg.fontSize)) state.fontSize = cfg.fontSize;
@@ -104,8 +129,13 @@
 
   function saveToStorage() {
     try {
+      const filtersOut = Object.keys(state.filters).map((k) => {
+        const [stop, line] = k.split("::");
+        return { stop, line, mins: state.filters[k] };
+      });
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         subs: state.subs,
+        filters: filtersOut,
         n: state.n,
         showDest: state.showDest,
         fontSize: state.fontSize,
@@ -207,29 +237,61 @@
     syncAll();
   }
 
+  function toggleExpanded(stopId) {
+    if (state.expanded[stopId]) delete state.expanded[stopId]; else state.expanded[stopId] = true;
+    renderSelected();
+  }
+
   function renderSelected() {
     const list = document.getElementById("selected");
     const countEl = document.getElementById("selected-count");
     const emptyEl = document.getElementById("selected-empty");
+    const controlsEl = document.getElementById("selected-controls");
     while (list.firstChild) list.removeChild(list.firstChild);
     countEl.textContent = state.subs.length ? `(${state.subs.length})` : "";
     emptyEl.hidden = state.subs.length > 0;
+    if (controlsEl) controlsEl.hidden = state.subs.length === 0;
 
     state.subs.forEach((sub, idx) => {
       const st = STATIONS_BY_ID[sub.id];
       if (!st) return;
+      const isOpen = !!state.expanded[sub.id];
 
-      // Direction toggle. Button labels are borough codes (MAN/BK/BX/QNS/SI)
-      // derived from the platform's direction label — clearer than N/S. We
-      // fall back to N/S when the label doesn't resolve to a borough (terminal
-      // stations) so there's always *something* to click.
+      // Compact header row — toggle + name/meta + remove.
+      const toggleBtn = el("button", {
+        class: "selected__toggle",
+        attrs: { type: "button", title: isOpen ? "Collapse" : "Expand", "aria-expanded": isOpen ? "true" : "false" },
+        text: isOpen ? "▾" : "▸",
+        on: { click: () => toggleExpanded(sub.id) },
+      });
+      const removeBtn = el("button", {
+        class: "remove-btn",
+        attrs: { type: "button", title: "Remove" },
+        text: "×",
+        on: { click: () => removeAt(idx) },
+      });
+      const main = el("div", { class: "selected__main" },
+        el("div", { class: "selected__name", text: st.name }),
+        el("div", { class: "selected__meta" },
+          bulletsRow(st.lines),
+          el("span", { class: "muted", text: st.borough || "" }),
+        ),
+      );
+      const headerRow = el("div", { class: "selected__row" }, toggleBtn, main, removeBtn);
+
+      // Expanded body — direction toggle + per-line min-minutes filters.
+      const body = el("div", { class: "selected__body" });
+      body.hidden = !isOpen;
+
+      // Direction
+      const dirLabel = el("p", { class: "selected__body-label", text: "Direction" });
       const dirToggle = el("div", { class: "dir-toggle", attrs: { role: "radiogroup" } });
-      const entries = [
+      const dirEntries = [
         ["N", st.n_short || "N", st.n_label || "Northbound"],
         ["S", st.s_short || "S", st.s_label || "Southbound"],
         ["*", "Both", "Both directions"],
       ];
-      entries.forEach(([dir, text, title]) => {
+      dirEntries.forEach(([dir, text, title]) => {
         const btn = el("button", {
           attrs: { type: "button", title, "aria-pressed": sub.dir === dir ? "true" : "false" },
           dataset: { dir },
@@ -239,22 +301,39 @@
         dirToggle.appendChild(btn);
       });
 
-      const removeBtn = el("button", {
-        class: "remove-btn",
-        attrs: { type: "button", title: "Remove" },
-        text: "×",
-        on: { click: () => removeAt(idx) },
+      // Per-line min-minutes
+      const filterLabel = el("p", { class: "selected__body-label", text: "Only show trains arriving in N+ minutes (per line)" });
+      const filterGrid = el("div", { class: "filter-grid" });
+      st.lines.forEach((line) => {
+        const row = el("div", { class: "filter-row" });
+        row.appendChild(bullet(line));
+        const input = el("input", {
+          attrs: { type: "number", min: "0", max: "120", step: "1", placeholder: "0" },
+        });
+        const current = getFilter(sub.id, line);
+        if (current > 0) input.value = String(current);
+        input.addEventListener("input", () => {
+          const v = parseInt(input.value, 10);
+          setFilter(sub.id, line, Number.isFinite(v) ? v : 0);
+          // light-weight update — don't re-render the whole list mid-typing
+          renderUrl();
+          saveToStorage();
+        });
+        input.addEventListener("blur", () => {
+          const cur = getFilter(sub.id, line);
+          input.value = cur > 0 ? String(cur) : "";
+        });
+        row.appendChild(input);
+        row.appendChild(el("span", { class: "filter-row__suffix", text: "min" }));
+        filterGrid.appendChild(row);
       });
 
-      const main = el("div", { class: "selected__main" },
-        el("div", { class: "selected__name", text: st.name }),
-        el("div", { class: "selected__meta" },
-          bulletsRow(st.lines),
-          el("span", { class: "muted", text: st.borough || "" }),
-        ),
-      );
+      body.appendChild(dirLabel);
+      body.appendChild(dirToggle);
+      body.appendChild(filterLabel);
+      body.appendChild(filterGrid);
 
-      const li = el("li", { class: "selected__item" }, main, dirToggle, removeBtn);
+      const li = el("li", { class: "selected__item" }, headerRow, body);
       list.appendChild(li);
     });
   }
@@ -300,10 +379,27 @@
     });
   });
 
+  // Expand all / Collapse all
+  const expandAllBtn = document.getElementById("expand-all");
+  const collapseAllBtn = document.getElementById("collapse-all");
+  if (expandAllBtn) expandAllBtn.addEventListener("click", () => {
+    state.expanded = {};
+    state.subs.forEach((s) => { state.expanded[s.id] = true; });
+    renderSelected();
+  });
+  if (collapseAllBtn) collapseAllBtn.addEventListener("click", () => {
+    state.expanded = {};
+    renderSelected();
+  });
+
   // ---------- URL preview + open ----------
   function buildPath() {
     const params = new URLSearchParams();
     state.subs.forEach((s) => params.append("s", `${s.id}:${s.dir}`));
+    Object.keys(state.filters).forEach((k) => {
+      const [stop, line] = k.split("::");
+      params.append("m", `${stop}:${line}:${state.filters[k]}`);
+    });
     params.set("n", String(state.n));
     params.set("d", state.showDest ? "1" : "0");
     params.set("f", state.fontSize);

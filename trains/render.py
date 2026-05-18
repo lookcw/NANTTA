@@ -100,20 +100,32 @@ class TrainRow:
     display: str  # "now" or "3 min" — JS may overwrite on per-second tick
 
 
-def upcoming(group: CardGroup, now: int, limit: int = 3) -> list[TrainRow]:
+def upcoming(
+    group: CardGroup,
+    now: int,
+    limit: int = 3,
+    filters: dict[tuple[str, str], int] | None = None,
+) -> list[TrainRow]:
     """Merge upcoming arrivals across every stop in the group's complex,
-    filter by direction, sort by arrival_epoch, slice to ``limit``."""
+    filter by direction, apply per-(stop, line) min-minutes filters,
+    sort by arrival_epoch, slice to ``limit``.
+    """
+    filters = filters or {}
     merged: list[Arrival] = []
     for sid in group.stop_ids:
         merged.extend(cache.for_stop(sid, limit=30))
     merged.sort(key=lambda a: a.arrival_epoch)
 
     rows: list[TrainRow] = []
-    seen_trips: set[str] = set()  # dedupe in case the same trip appears at sibling platforms
+    seen_trips: set[str] = set()
     for a in merged:
         if group.direction != "*" and a.direction != group.direction:
             continue
         if a.trip_id in seen_trips:
+            continue
+        # Per-line min-minutes filter: drop trains arriving too soon.
+        min_mins = filters.get((a.parent_stop_id, a.route_id), 0)
+        if min_mins and (a.arrival_epoch - now) < min_mins * 60:
             continue
         seen_trips.add(a.trip_id)
         rows.append(_to_row(a, now))
@@ -196,10 +208,11 @@ def render_card(
     now: int | None = None,
     limit: int = 3,
     show_dest: bool = True,
+    filters: dict[tuple[str, str], int] | None = None,
 ) -> str:
     if now is None:
         now = int(time.time())
-    rows = upcoming(group, now=now, limit=limit)
+    rows = upcoming(group, now=now, limit=limit, filters=filters)
     ctx = {
         "group": group,
         "complex": group.complex,
