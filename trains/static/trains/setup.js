@@ -32,8 +32,23 @@
   function findSubIndex(cx) {
     return state.subs.findIndex((s) => s.cx === cx);
   }
+  function aliveDirection(complex, line) {
+    // Returns "N" / "S" if this line terminates at the complex (only one
+    // direction has trains), else null (both directions available).
+    const info = (LINE_INFO[complex.id] || {})[line] || {};
+    const hasN = !!info.n_label;
+    const hasS = !!info.s_label;
+    if (hasN && !hasS) return "N";
+    if (!hasN && hasS) return "S";
+    return null;
+  }
   function defaultLineSpecs(complex) {
-    return complex.lines.map((line) => ({ line, dir: "*" }));
+    return complex.lines.map((line) => {
+      // For terminal lines, default to the alive direction so the UI doesn't
+      // dangle a useless "*" / opposite-direction choice.
+      const alive = aliveDirection(complex, line);
+      return { line, dir: alive || "*" };
+    });
   }
 
   // ---------- DOM helpers ----------
@@ -425,13 +440,20 @@
 
         const bul = bullet(line);
 
+        // For terminal lines (G at Court Sq, N/W at Astoria-Ditmars, etc.)
+        // only show the alive direction button + a "(terminating)" note.
+        const alive = aliveDirection(cx, line);
         const dirGroup = el("div", { class: "dir-toggle dir-toggle--row", attrs: { role: "radiogroup" } });
-        const currentDir = entry ? entry.dir : "*";
-        [
-          ["N", info.n_short || "N", info.n_label || "Northbound"],
-          ["S", info.s_short || "S", info.s_label || "Southbound"],
-          ["*", "Both", "Both directions"],
-        ].forEach(([dir, text, title]) => {
+        const currentDir = entry ? entry.dir : (alive || "*");
+        const dirEntries = alive
+          ? [[alive, alive === "N" ? (info.n_short || "N") : (info.s_short || "S"),
+              alive === "N" ? (info.n_label || "Northbound") : (info.s_label || "Southbound")]]
+          : [
+              ["N", info.n_short || "N", info.n_label || "Northbound"],
+              ["S", info.s_short || "S", info.s_label || "Southbound"],
+              ["*", "Both", "Both directions"],
+            ];
+        dirEntries.forEach(([dir, text, title]) => {
           const btn = el("button", {
             attrs: { type: "button", title, "aria-pressed": currentDir === dir ? "true" : "false" },
             dataset: { dir },
@@ -441,6 +463,10 @@
           btn.disabled = !isOn;
           dirGroup.appendChild(btn);
         });
+        if (alive) {
+          const note = el("span", { class: "line-row__terminus", text: "terminus" });
+          dirGroup.appendChild(note);
+        }
 
         row.appendChild(cbWrap);
         row.appendChild(bul);

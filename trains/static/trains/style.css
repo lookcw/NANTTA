@@ -605,6 +605,15 @@ html, body {
 .dir-toggle--row {
   justify-self: end;
   flex-wrap: nowrap;
+  align-items: center;
+}
+.line-row__terminus {
+  margin-left: 8px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-style: italic;
 }
 
 /* Compact-row inline min-mins control */
