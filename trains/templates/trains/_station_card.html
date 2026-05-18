@@ -1,5 +1,5 @@
 {% load static %}
-<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ group.card_id }}" data-complex-id="{{ complex.id }}" data-direction="{{ group.direction }}">
+<article class="card{% if not show_dest %} card--compact{% endif %}" id="{{ sub.card_id }}" data-complex-id="{{ sub.complex_id }}" data-direction="{{ sub.direction }}">
   <header class="card__header">
     <h2 class="card__name">{{ complex.name|default:complex.id }}</h2>
     <div class="card__sub">

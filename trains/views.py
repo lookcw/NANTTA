@@ -16,7 +16,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from .cache import cache
-from .render import feed_age_seconds, group_subscriptions, render_card
+from .render import feed_age_seconds, render_card
 from .stations import registry
 from .subscriptions import parse as parse_subs
 
@@ -97,50 +97,35 @@ def _read_font_size(request: HttpRequest) -> str:
     return raw if raw in ("s", "m", "l") else "m"
 
 
-def _parse_filters(raw_list: list[str]) -> dict[tuple[str, str], int]:
-    """Parse repeated ``m=<stop_id>:<line>:<min_minutes>`` params.
-
-    Returns a map (stop_id, route_id) -> min_minutes (int). Malformed entries
-    are silently dropped. Negative or absurdly large minutes are clamped.
-    """
-    out: dict[tuple[str, str], int] = {}
-    for raw in raw_list:
-        parts = raw.strip().split(":")
-        if len(parts) != 3:
-            continue
-        stop_id, line, mins_raw = parts[0].strip(), parts[1].strip(), parts[2].strip()
-        if not stop_id or not line:
-            continue
-        try:
-            mins = int(mins_raw)
-        except ValueError:
-            continue
-        mins = max(0, min(mins, 120))
-        if mins <= 0:
-            continue  # 0 = no filter; don't store
-        out[(stop_id, line)] = mins
-    return out
+def _sub_to_url_value(sub) -> str:
+    """Canonical URL-form value for a Subscription's ``s=`` param."""
+    base = f"cx{sub.complex_id}:{sub.direction}"
+    if sub.lines:
+        base += ":" + ",".join(sub.lines)
+    return base
 
 
 @require_GET
 def display(request: HttpRequest):
-    subs = parse_subs(request.GET.getlist("s"))
+    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
     show_dest = _read_show_dest(request)
     font_size = _read_font_size(request)
-    filters = _parse_filters(request.GET.getlist("m"))
     # When destinations are hidden, default n bumps from 3 to 6 — rows are
     # visually shorter so we can fit more before getting cluttered.
     n = _read_n(request, default=6 if not show_dest else 3)
     now = int(time.time())
-    groups = group_subscriptions(subs)
-    cards = [render_card(g, now=now, limit=n, show_dest=show_dest, filters=filters) for g in groups]
+    cards = [render_card(s, now=now, limit=n, show_dest=show_dest) for s in subs]
 
-    common_params: list[tuple[str, str]] = [("s", f"{s.stop_id}:{s.direction}") for s in subs]
+    common_params: list[tuple[str, str]] = [("s", _sub_to_url_value(s)) for s in subs]
     common_params.append(("n", str(n)))
     common_params.append(("d", "1" if show_dest else "0"))
     common_params.append(("f", font_size))
-    for (sid, line), mins in filters.items():
-        common_params.append(("m", f"{sid}:{line}:{mins}"))
+    # Min-mins is per-complex; emit one m= per distinct (complex, mins) pair.
+    seen_mins: set[str] = set()
+    for s in subs:
+        if s.min_mins and s.complex_id not in seen_mins:
+            common_params.append(("m", f"cx{s.complex_id}:{s.min_mins}"))
+            seen_mins.add(s.complex_id)
 
     return render(request, "trains/display.html", {
         "subs": subs,
@@ -151,32 +136,28 @@ def display(request: HttpRequest):
         "trains_per_card": n,
         "show_destination": show_dest,
         "font_size": font_size,
-        "filters": filters,
     })
 
 
 def display_stream(request: HttpRequest):
     """SSE endpoint pushing Turbo Stream updates for every subscribed card."""
-    subs = parse_subs(request.GET.getlist("s"))
+    subs = parse_subs(request.GET.getlist("s"), request.GET.getlist("m"))
     if not subs:
         return HttpResponseBadRequest("missing 's' subscriptions")
     show_dest = _read_show_dest(request)
     n = _read_n(request, default=6 if not show_dest else 3)
-    filters = _parse_filters(request.GET.getlist("m"))
-    groups = group_subscriptions(subs)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
 
     def event_stream():
-        # First message immediately so the client gets fresh content on connect.
         while True:
             now = int(time.time())
             payload_parts: list[str] = []
-            for g in groups:
-                html = render_card(g, now=now, limit=n, show_dest=show_dest, filters=filters)
+            for s in subs:
+                html = render_card(s, now=now, limit=n, show_dest=show_dest)
                 payload_parts.append(
-                    f'<turbo-stream action="replace" target="{g.card_id}">'
+                    f'<turbo-stream action="replace" target="{s.card_id}">'
                     f'<template>{html}</template></turbo-stream>'
                 )
             # SSE: collapse any newlines in the payload into one "data:" line
@@ -197,32 +178,60 @@ def display_stream(request: HttpRequest):
 
 @require_GET
 def setup(request: HttpRequest):
-    """Render the setup page with all stations embedded as JSON for the client.
+    """Render the setup page with the complex list embedded as JSON.
 
-    Per the design: /setup search and Selected list stay per-stop. The
-    complex grouping is applied at render time on /display, not here.
+    Setup now operates on complexes (one row per transfer station) rather
+    than per-platform stop_ids. Each complex carries:
+      - id, name, borough, lines (union of member lines)
+      - n_short / s_short: best-effort borough codes for the direction toggle
+      - search_haystack: extra tokens for the search box (member stop_ids and
+        per-platform names) so typing "F09" or "Court Sq-23 St" still finds
+        the Court Sq complex.
     """
-    from .stations import STATIONS_JSON
+    from .stations import STATIONS_JSON, direction_borough_short
     try:
         with open(STATIONS_JSON, encoding="utf-8") as f:
             raw = json.load(f)
     except FileNotFoundError:
         raw = {}
-    from .stations import direction_borough_short
     stops_raw = raw.get("stops") or {}
-    stations_list = []
-    for stop_id, row in stops_raw.items():
-        stations_list.append({
-            "id": stop_id,
-            "name": row.get("name") or stop_id,
+    complexes_raw = raw.get("complexes") or {}
+
+    complexes_list = []
+    for cid, row in complexes_raw.items():
+        member_stops = [stops_raw[sid] for sid in row.get("stop_ids", []) if sid in stops_raw]
+        # Direction borough codes: pick the most common derivable code across
+        # member platforms (terminal-only platforms with no label are skipped).
+        n_codes = [direction_borough_short(m.get("north_label")) for m in member_stops]
+        s_codes = [direction_borough_short(m.get("south_label")) for m in member_stops]
+        n_codes = [c for c in n_codes if c]
+        s_codes = [c for c in s_codes if c]
+        n_short = max(set(n_codes), key=n_codes.count) if n_codes else ""
+        s_short = max(set(s_codes), key=s_codes.count) if s_codes else ""
+
+        # Search corpus: tokens from member names + stop_ids + the complex's
+        # own name and id so the search hits whatever a user might type.
+        haystack_tokens: set[str] = set()
+        haystack_tokens.add(row.get("name") or "")
+        haystack_tokens.add(cid)
+        for sid in row.get("stop_ids", []):
+            haystack_tokens.add(sid)
+            stop = stops_raw.get(sid) or {}
+            if stop.get("name"):
+                haystack_tokens.add(stop["name"])
+        haystack = " ".join(t for t in haystack_tokens if t).lower()
+
+        complexes_list.append({
+            "id": cid,
+            "name": row.get("name") or cid,
             "borough": row.get("borough") or "",
-            "lines": row.get("lines") or [],
-            "n_label": row.get("north_label"),
-            "s_label": row.get("south_label"),
-            "n_short": direction_borough_short(row.get("north_label")),
-            "s_short": direction_borough_short(row.get("south_label")),
+            "lines": list(row.get("lines") or []),
+            "stop_ids": list(row.get("stop_ids") or []),
+            "n_short": n_short,
+            "s_short": s_short,
+            "haystack": haystack,
         })
-    stations_list.sort(key=lambda s: s["name"])
+    complexes_list.sort(key=lambda c: c["name"])
     return render(request, "trains/setup.html", {
-        "stations_json": json.dumps(stations_list),
+        "stations_json": json.dumps(complexes_list),
     })
