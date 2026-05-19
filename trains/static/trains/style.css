@@ -132,6 +132,83 @@ html, body {
 }
 .gear:hover { color: var(--accent); border-color: var(--panel-border); }
 
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.info-btn:hover { color: var(--accent); border-color: var(--panel-border); }
+.info-btn:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+
+.about-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 10;
+}
+.about-modal {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  max-width: 520px;
+  width: 100%;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  color: var(--text);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.about-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.about-modal__head h2 {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.about-modal__close {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 22px;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.about-modal__close:hover { color: var(--accent); border-color: var(--panel-border); }
+.about-modal__body {
+  padding: 16px 20px 20px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.about-modal__body p { margin: 0 0 12px; }
+.about-modal__body p:last-child { margin-bottom: 0; }
+
 .empty {
   padding: 80px 32px;
   color: var(--text-dim);
@@ -367,6 +444,8 @@ html, body {
   .chip { padding: 3px 10px 3px 3px; gap: 6px; }
   .gear { width: 28px; height: 28px; }
   .gear svg { width: 18px; height: 18px; }
+  .info-btn { width: 28px; height: 28px; }
+  .info-btn svg { width: 18px; height: 18px; }
 }
 
 /* ============== Setup page ============== */
