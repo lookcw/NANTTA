@@ -1,3 +1,6 @@
+import { useState } from "react";
+import type { DragEvent } from "react";
+
 import { SelectedItem } from "./SelectedItem";
 import type { ComplexIndex } from "../lib/subscriptions";
 import type { Subscription } from "../lib/types";
@@ -21,6 +24,48 @@ export function SelectedList({
   onExpandAll,
   onCollapseAll,
 }: SelectedListProps) {
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  // Index where the dragged item will land. 0..subs.length inclusive: N means
+  // "insert at the end". null means no active drag.
+  const [insertAt, setInsertAt] = useState<number | null>(null);
+
+  const onDragStart = (idx: number) => (e: DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(idx));
+    setDragIdx(idx);
+  };
+
+  const onDragOver = (idx: number) => (e: DragEvent<HTMLLIElement>) => {
+    if (dragIdx === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const insertBefore = e.clientY < rect.top + rect.height / 2;
+    const nextInsertAt = insertBefore ? idx : idx + 1;
+    if (insertAt !== nextInsertAt) setInsertAt(nextInsertAt);
+  };
+
+  const onDrop = () => (e: DragEvent) => {
+    e.preventDefault();
+    const ia = insertAt;
+    const from = dragIdx;
+    setInsertAt(null);
+    setDragIdx(null);
+    if (from === null || ia === null) return;
+    // Adjust target index for the source removal.
+    const target = ia > from ? ia - 1 : ia;
+    if (target === from) return;
+    const next = subs.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(target, 0, moved);
+    onSubsChange(next);
+  };
+
+  const onDragEnd = () => {
+    setDragIdx(null);
+    setInsertAt(null);
+  };
+
   return (
     <>
       <div className="selected-head">
@@ -45,6 +90,7 @@ export function SelectedList({
         {subs.map((sub, idx) => {
           const cx = byId.get(sub.cx);
           if (!cx) return null;
+          const isLast = idx === subs.length - 1;
           return (
             <SelectedItem
               key={sub.cx}
@@ -62,6 +108,13 @@ export function SelectedList({
                 next[idx] = nextSub;
                 onSubsChange(next);
               }}
+              onDragStart={onDragStart(idx)}
+              onDragOver={onDragOver(idx)}
+              onDrop={onDrop()}
+              onDragEnd={onDragEnd}
+              isDragging={dragIdx === idx}
+              insertAbove={dragIdx !== null && insertAt === idx && dragIdx !== idx && dragIdx !== idx - 1}
+              insertBelow={dragIdx !== null && isLast && insertAt === subs.length && dragIdx !== idx}
             />
           );
         })}
@@ -71,7 +124,7 @@ export function SelectedList({
         className="muted selected__empty"
         hidden={subs.length > 0}
       >
-        No stations yet — search above to add one.
+        No stations yet. Search above to add one.
       </p>
     </>
   );

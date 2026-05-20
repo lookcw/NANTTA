@@ -45,7 +45,8 @@ class TrainRow:
 def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
     """Merge upcoming arrivals across every stop in the subscription's
     complex, applying per-line direction filters + per-complex min-minutes,
-    sort by arrival_epoch, slice to ``limit``.
+    sort by arrival_epoch, and cap each ``(line, direction)`` bucket at
+    ``limit`` rows. ``limit`` is per-bucket, not per-card.
 
     ``sub.line_specs`` is a tuple of ``(line, direction)``. A line not present
     in the tuple is excluded entirely. ``direction == "*"`` matches either way.
@@ -67,6 +68,7 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
     min_seconds = sub.min_mins * 60
     rows: list[TrainRow] = []
     seen_trips: set[str] = set()
+    per_bucket: dict[tuple[str, str], int] = {}
     for a in merged:
         base_line = a.route_id[:-1] if a.route_id.endswith("X") and len(a.route_id) > 1 else a.route_id
         wanted_dir = line_dir.get(base_line)
@@ -78,10 +80,12 @@ def upcoming(sub: Subscription, now: int, limit: int = 3) -> list[TrainRow]:
             continue
         if a.trip_id in seen_trips:
             continue
+        bucket = (base_line, a.direction)
+        if per_bucket.get(bucket, 0) >= limit:
+            continue
+        per_bucket[bucket] = per_bucket.get(bucket, 0) + 1
         seen_trips.add(a.trip_id)
         rows.append(_to_row(a, now, show_dest=line_show_dest.get(base_line, True)))
-        if len(rows) >= limit:
-            break
     return rows
 
 

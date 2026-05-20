@@ -59,7 +59,7 @@ export function defaultLineSpecs(complex: Complex): LineSpec[] {
   return complex.lines.map((line) => ({
     line,
     dir: aliveDirection(complex, line) ?? "*",
-    showDest: true,
+    showDest: false,
   }));
 }
 
@@ -174,7 +174,7 @@ export function parseUrlConfig(
   }
 
   const nRaw = parseInt(params.get("n") ?? "", 10);
-  const n = Number.isFinite(nRaw) ? Math.max(1, Math.min(nRaw, 20)) : 3;
+  const n = Number.isFinite(nRaw) ? Math.max(1, Math.min(nRaw, 20)) : 2;
 
   const fRaw = params.get("f");
   const fontSize: FontSize = isFontSize(fRaw) ? fRaw : "m";

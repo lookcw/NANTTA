@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { DragEvent } from "react";
 import { Bullet } from "../components/Bullet";
 import { LineRow } from "./LineRow";
 import type { Complex, Direction, Subscription } from "../lib/types";
@@ -10,6 +11,13 @@ interface SelectedItemProps {
   onToggleExpanded: () => void;
   onRemove: () => void;
   onChange: (next: Subscription) => void;
+  onDragStart: (e: DragEvent) => void;
+  onDragOver: (e: DragEvent<HTMLLIElement>) => void;
+  onDrop: (e: DragEvent) => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+  insertAbove: boolean;
+  insertBelow: boolean;
 }
 
 export function SelectedItem({
@@ -19,6 +27,13 @@ export function SelectedItem({
   onToggleExpanded,
   onRemove,
   onChange,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  isDragging,
+  insertAbove,
+  insertBelow,
 }: SelectedItemProps) {
   // Local text state for the min-mins input so the user can clear and retype
   // without the displayed value snapping back on each keystroke.
@@ -35,7 +50,7 @@ export function SelectedItem({
     const idx = sub.lines.findIndex((l) => l.line === line);
     let nextLines = sub.lines.slice();
     if (idx === -1) {
-      nextLines.push({ line, dir: "*", showDest: true });
+      nextLines.push({ line, dir: "*", showDest: false });
     } else {
       nextLines.splice(idx, 1);
     }
@@ -66,9 +81,29 @@ export function SelectedItem({
     if (next !== sub.mins) onChange({ ...sub, mins: next });
   }
 
+  const itemClass =
+    "selected__item" +
+    (isDragging ? " selected__item--dragging" : "") +
+    (insertAbove ? " selected__item--insert-above" : "") +
+    (insertBelow ? " selected__item--insert-below" : "");
   return (
-    <li className="selected__item">
+    <li
+      className={itemClass}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <div className="selected__row">
+        <button
+          type="button"
+          className="selected__drag"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+        >
+          ☰
+        </button>
         <button
           type="button"
           className="selected__toggle"
@@ -89,10 +124,7 @@ export function SelectedItem({
             <span className="muted">{complex.borough || ""}</span>
           </div>
         </div>
-        <label
-          className="mins-inline"
-          title="Hide trains arriving sooner than this (minutes from now)"
-        >
+        <label className="mins-inline">
           <input
             ref={minsInputRef}
             type="number"
@@ -107,7 +139,30 @@ export function SelectedItem({
             }}
             onBlur={() => setMinsText(sub.mins > 0 ? String(sub.mins) : "")}
           />
-          <span className="mins-inline__suffix">min+</span>
+          <span className="mins-inline__suffix">min away</span>
+          <button
+            type="button"
+            className="info-btn info-btn--inline"
+            data-tip="We won't show trains arriving sooner than this."
+            aria-label="We won't show trains arriving sooner than this."
+            onClick={(e) => e.preventDefault()}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9.5" />
+              <line x1="12" y1="11" x2="12" y2="16.5" />
+              <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
         </label>
         <button
           type="button"
@@ -120,7 +175,7 @@ export function SelectedItem({
       </div>
       <div className="selected__body" hidden={!expanded}>
         <p className="selected__body-note">
-          Pick the lines and the direction for each. Trains arriving in less than the “min+” minutes won't be shown.
+          Pick the lines and direction for each.
         </p>
         <div className="line-rows">
           {complex.lines.map((line) => (

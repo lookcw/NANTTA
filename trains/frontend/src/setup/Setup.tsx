@@ -16,7 +16,7 @@ import { Search } from "./Search";
 import { SelectedList } from "./SelectedList";
 import { UrlPreview } from "./UrlPreview";
 
-const DEFAULT_CONFIG: UserConfig = { subs: [], n: 3, fontSize: "m" };
+const DEFAULT_CONFIG: UserConfig = { subs: [], n: 2, fontSize: "m" };
 
 export function Setup() {
   const [complexes, setComplexes] = useState<Complex[] | null>(null);

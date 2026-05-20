@@ -20,7 +20,7 @@ export function DisplayOptions({ n, fontSize, onNChange, onFontSizeChange }: Dis
     <>
       <div className="options-grid">
         <div className="option option--inline">
-          <label htmlFor="opt-n">Trains per station</label>
+          <label htmlFor="opt-n">Trains per direction</label>
           <input
             ref={inputRef}
             id="opt-n"

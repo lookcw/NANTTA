@@ -138,7 +138,7 @@ export function Display() {
             Add subscriptions like{" "}
             <code>/display?s=127:N&amp;s=127:S&amp;s=R31:N&amp;n=2</code>
           </p>
-          <p><code>n</code> sets trains per card (default 3, max 12).</p>
+          <p><code>n</code> sets trains per line direction (default 2, max 20).</p>
           <p>
             Lookup station IDs from the GTFS Stops column at{" "}
             <a href="http://web.mta.info/developers/data/nyct/subway/Stations.csv">

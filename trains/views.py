@@ -190,7 +190,7 @@ def api_display_stream(request: HttpRequest):
         return HttpResponseBadRequest("missing 's' subscriptions")
     if _read_legacy_hide_dest(request):
         subs = _apply_legacy_hide_dest(subs)
-    n = _read_n(request, default=3)
+    n = _read_n(request, default=2)
 
     interval = float(request.GET.get("interval", "5"))
     interval = max(1.0, min(interval, 30.0))
@@ -269,7 +269,7 @@ def api_display(request: HttpRequest):
     if _read_legacy_hide_dest(request):
         subs = _apply_legacy_hide_dest(subs)
     font_size = _read_font_size(request)
-    n = _read_n(request, default=3)
+    n = _read_n(request, default=2)
     now = int(time.time())
     return JsonResponse({
         "server_now": now,

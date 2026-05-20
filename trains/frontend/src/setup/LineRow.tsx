@@ -64,13 +64,16 @@ export function LineRow({ complex, line, spec, onToggle, onSetDir, onSetShowDest
 
       <button
         type="button"
-        className={"line-row__dest-toggle" + (destOn ? " line-row__dest-toggle--on" : "")}
+        role="switch"
+        className={"line-row__dest-switch" + (destOn ? " line-row__dest-switch--on" : "")}
         title={destOn ? "Hide destination on this line" : "Show destination on this line"}
-        aria-pressed={destOn}
+        aria-checked={destOn}
+        aria-label="Show destination on this line"
         disabled={!isOn}
         onClick={() => isOn && onSetShowDest(!destOn)}
       >
-        {destOn ? "Dest. on" : "Dest. off"}
+        <span className="line-row__dest-switch__track" />
+        <span className="line-row__dest-switch__thumb" />
       </button>
     </div>
   );
